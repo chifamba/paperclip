@@ -337,13 +337,13 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     }
   }
   const commandNotes = (() => {
-    const notes: string[] = ["Prompt is passed to Gemini via a positional argument."];
+    const notes: string[] = ["Prompt is passed to Gemini via stdin."];
     notes.push("Added --approval-mode yolo for unattended execution.");
     if (!instructionsFilePath) return notes;
     if (instructionsPrefix.length > 0) {
       notes.push(
         `Loaded agent instructions from ${instructionsFilePath}`,
-        `Prepended instructions + path directive to prompt (relative references from ${instructionsDir}).`,
+        `Prepended instructions + path directive to stdin prompt (relative references from ${instructionsDir}).`,
       );
       return notes;
     }
@@ -399,7 +399,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       args.push("--sandbox=none");
     }
     if (extraArgs.length > 0) args.push(...extraArgs);
-    args.push(prompt);
+    args.push("--prompt", "");
     return args;
   };
 
@@ -411,9 +411,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
         command,
         cwd,
         commandNotes,
-        commandArgs: args.map((value, index) => (
-          index === args.length - 1 ? `<prompt ${prompt.length} chars>` : value
-        )),
+        commandArgs: args,
         env: redactEnvForLogs(env),
         prompt,
         promptMetrics,
@@ -424,6 +422,7 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
     const proc = await runChildProcess(runId, command, args, {
       cwd,
       env,
+      stdin: prompt,
       timeoutSec,
       graceSec,
       onSpawn,

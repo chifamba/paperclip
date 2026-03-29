@@ -144,6 +144,14 @@ export function parseGeminiJsonl(stdout: string) {
       continue;
     }
 
+    if (type === "message" && asString(event.role, "").trim() === "assistant") {
+      const contentStr = asString(event.content, "").trim();
+      const contentArr = Array.isArray(event.content) ? event.content.map(c => asString(parseObject(c).text, "")).join("") : "";
+      if (contentStr) messages.push(contentStr);
+      else if (contentArr) messages.push(contentArr);
+      continue;
+    }
+
     if (type === "system") {
       const subtype = asString(event.subtype, "").trim().toLowerCase();
       if (subtype === "error") {

@@ -45,7 +45,7 @@ type CapturePayload = {
 };
 
 describe("gemini execute", () => {
-  it("passes prompt via --prompt and injects paperclip env vars", async () => {
+  it("passes prompt via stdin and injects paperclip env vars", async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-gemini-execute-"));
     const workspace = path.join(root, "workspace");
     const commandPath = path.join(root, "gemini");
@@ -96,11 +96,14 @@ describe("gemini execute", () => {
       const capture = JSON.parse(await fs.readFile(capturePath, "utf8")) as CapturePayload;
       expect(capture.argv).toContain("--output-format");
       expect(capture.argv).toContain("stream-json");
+      expect(capture.argv).toContain("--prompt");
       expect(capture.argv).toContain("--approval-mode");
       expect(capture.argv).toContain("yolo");
-      const promptArg = capture.argv[capture.argv.length - 1];
-      expect(promptArg).toContain("Follow the paperclip heartbeat.");
-      expect(promptArg).toContain("Paperclip runtime note:");
+      
+      const promptFlagIndex = capture.argv.indexOf("--prompt");
+      const promptArg = promptFlagIndex >= 0 ? capture.argv[promptFlagIndex + 1] : "NOT_FOUND";
+      expect(promptArg).toBe("");
+
       expect(capture.paperclipEnvKeys).toEqual(
         expect.arrayContaining([
           "PAPERCLIP_AGENT_ID",
@@ -110,6 +113,7 @@ describe("gemini execute", () => {
           "PAPERCLIP_RUN_ID",
         ]),
       );
+      expect(invocationPrompt).toContain("Follow the paperclip heartbeat.");
       expect(invocationPrompt).toContain("Paperclip runtime note:");
       expect(invocationPrompt).toContain("PAPERCLIP_API_URL");
       expect(invocationPrompt).toContain("Paperclip API access note:");
