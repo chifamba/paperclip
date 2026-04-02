@@ -418,15 +418,10 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
         command: resolvedCommand,
         cwd,
         commandNotes,
-<<<<<<< HEAD
-        commandArgs: args,
-        env: redactEnvForLogs(env),
-=======
         commandArgs: args.map((value, index) => (
           index === args.length - 1 ? `<prompt ${prompt.length} chars>` : value
         )),
         env: loggedEnv,
->>>>>>> paperclipai/master
         prompt,
         promptMetrics,
         context,
