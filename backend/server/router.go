@@ -35,5 +35,16 @@ func SetupRouter(db *gorm.DB) *chi.Mux {
 	r.Patch("/goals/{id}", routes.UpdateGoalHandler(db))
 	r.Delete("/goals/{id}", routes.DeleteGoalHandler(db))
 
+	// Companies Routes
+	r.Get("/companies", routes.ListCompaniesHandler(db))
+	r.Post("/companies", routes.CreateCompanyHandler(db))
+	r.Get("/companies/{id}", routes.GetCompanyHandler(db))
+	r.Patch("/companies/{id}", routes.UpdateCompanyHandler(db))
+	r.Delete("/companies/{id}", routes.DeleteCompanyHandler(db))
+
+	// Costs Routes
+	r.Post("/companies/{companyId}/costs/events", routes.ReportCostHandler(db))
+	r.Get("/companies/{companyId}/costs/summary", routes.CostSummaryHandler(db))
+
 	return r
 }
