@@ -21,5 +21,30 @@ func SetupRouter(db *gorm.DB) *chi.Mux {
 	// Routes
 	r.Get("/health", routes.HealthHandler(db))
 
+	// Dashboard Routes
+	r.Get("/companies/{companyId}/dashboard", routes.DashboardHandler(db))
+
+	// Activity Routes
+	r.Get("/companies/{companyId}/activity", routes.ListActivityHandler(db))
+	r.Post("/companies/{companyId}/activity", routes.CreateActivityHandler(db))
+
+	// Goals Routes
+	r.Get("/companies/{companyId}/goals", routes.ListGoalsHandler(db))
+	r.Post("/companies/{companyId}/goals", routes.CreateGoalHandler(db))
+	r.Get("/goals/{id}", routes.GetGoalHandler(db))
+	r.Patch("/goals/{id}", routes.UpdateGoalHandler(db))
+	r.Delete("/goals/{id}", routes.DeleteGoalHandler(db))
+
+	// Companies Routes
+	r.Get("/companies", routes.ListCompaniesHandler(db))
+	r.Post("/companies", routes.CreateCompanyHandler(db))
+	r.Get("/companies/{id}", routes.GetCompanyHandler(db))
+	r.Patch("/companies/{id}", routes.UpdateCompanyHandler(db))
+	r.Delete("/companies/{id}", routes.DeleteCompanyHandler(db))
+
+	// Costs Routes
+	r.Post("/companies/{companyId}/costs/events", routes.ReportCostHandler(db))
+	r.Get("/companies/{companyId}/costs/summary", routes.CostSummaryHandler(db))
+
 	return r
 }
