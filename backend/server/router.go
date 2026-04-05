@@ -46,5 +46,12 @@ func SetupRouter(db *gorm.DB) *chi.Mux {
 	r.Post("/companies/{companyId}/costs/events", routes.ReportCostHandler(db))
 	r.Get("/companies/{companyId}/costs/summary", routes.CostSummaryHandler(db))
 
+	// Projects Routes
+	r.Get("/companies/{companyId}/projects", routes.ListProjectsHandler(db))
+	r.Post("/companies/{companyId}/projects", routes.CreateProjectHandler(db))
+	r.Get("/projects/{id}", routes.GetProjectHandler(db))
+	r.Patch("/projects/{id}", routes.UpdateProjectHandler(db))
+	r.Delete("/projects/{id}", routes.DeleteProjectHandler(db))
+
 	return r
 }
