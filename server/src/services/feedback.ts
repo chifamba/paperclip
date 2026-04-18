@@ -1,6 +1,6 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
-import { and, asc, desc, eq, getTableColumns, gte, lte, ne, or } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, gte, lte, ne, or, inArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -1768,17 +1768,17 @@ export function feedbackService(db: Db, options: FeedbackServiceOptions = {}) {
           .limit(Math.max(1, Math.min(input?.limit ?? 25, 200)));
 
         const attemptAt = input?.now ?? new Date();
-        for (const row of rows) {
+        if (rows.length > 0) {
           await db
             .update(feedbackExports)
             .set({
               status: "failed",
-              attemptCount: row.attemptCount + 1,
+              attemptCount: sql`${feedbackExports.attemptCount} + 1`,
               lastAttemptedAt: attemptAt,
               failureReason: FEEDBACK_EXPORT_BACKEND_NOT_CONFIGURED,
               updatedAt: attemptAt,
             })
-            .where(eq(feedbackExports.id, row.id));
+            .where(inArray(feedbackExports.id, rows.map(r => r.id)));
         }
 
         return {
