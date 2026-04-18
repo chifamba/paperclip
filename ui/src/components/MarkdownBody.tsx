@@ -1,6 +1,7 @@
 import { isValidElement, useEffect, useId, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import DOMPurify from "dompurify";
+import dompurify from "dompurify";
+const DOMPurify = typeof window !== "undefined" ? dompurify(window as unknown as Window & typeof globalThis) : dompurify;
 import Markdown, { defaultUrlTransform, type Components, type Options } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn } from "../lib/utils";

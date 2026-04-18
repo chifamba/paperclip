@@ -8,7 +8,15 @@ import { buildAgentMentionHref, buildProjectMentionHref, buildSkillMentionHref, 
 import { ThemeProvider } from "../context/ThemeContext";
 import { MarkdownBody } from "./MarkdownBody";
 import { queryKeys } from "../lib/queryKeys";
-import DOMPurify from "dompurify";
+import dompurify from "dompurify";
+let DOMPurify: any;
+try {
+  const jsdom = require("jsdom");
+  const window = new jsdom.JSDOM("").window;
+  DOMPurify = dompurify(window as unknown as Window & typeof globalThis);
+} catch {
+  DOMPurify = typeof window !== "undefined" ? dompurify(window as unknown as Window & typeof globalThis) : dompurify;
+}
 
 const mockIssuesApi = vi.hoisted(() => ({
   get: vi.fn(),

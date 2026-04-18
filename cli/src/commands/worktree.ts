@@ -618,11 +618,14 @@ function detectGitWorkspaceInfo(cwd: string): GitWorkspaceInfo | null {
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
-    const hooksPathRaw = execFileSync("git", ["rev-parse", "--git-path", "hooks"], {
+    let hooksPathRaw = execFileSync("git", ["rev-parse", "--git-path", "hooks"], {
       cwd: root,
       encoding: "utf8",
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
+    if (hooksPathRaw === "/dev/null" || hooksPathRaw === "") {
+      hooksPathRaw = ".git/hooks";
+    }
     return {
       root: path.resolve(root),
       commonDir: path.resolve(root, commonDirRaw),
@@ -637,7 +640,12 @@ function detectGitWorkspaceInfo(cwd: string): GitWorkspaceInfo | null {
 function copyDirectoryContents(sourceDir: string, targetDir: string): boolean {
   if (!existsSync(sourceDir)) return false;
 
-  const entries = readdirSync(sourceDir, { withFileTypes: true });
+  let entries;
+  try {
+    entries = readdirSync(sourceDir, { withFileTypes: true });
+  } catch (err) {
+    return false;
+  }
   if (entries.length === 0) return false;
 
   mkdirSync(targetDir, { recursive: true });
