@@ -8,6 +8,7 @@ import { buildAgentMentionHref, buildProjectMentionHref, buildSkillMentionHref, 
 import { ThemeProvider } from "../context/ThemeContext";
 import { MarkdownBody } from "./MarkdownBody";
 import { queryKeys } from "../lib/queryKeys";
+import DOMPurify from "dompurify";
 
 const mockIssuesApi = vi.hoisted(() => ({
   get: vi.fn(),
@@ -216,5 +217,20 @@ describe("MarkdownBody", () => {
 
     expect(html).toContain("<pre");
     expect(html).toContain('style="max-width:100%;overflow-x:auto"');
+  });
+
+  it("renders mermaid diagram container", () => {
+    const html = renderMarkdown("```mermaid\ngraph TD; A-->B;\n```");
+    expect(html).toContain('<div class="paperclip-mermaid">');
+    expect(html).toContain("Rendering Mermaid diagram...");
+  });
+
+  it("sanitizes malicious SVG using the same configuration as the component", () => {
+    const maliciousSvg = '<svg><script>alert("xss")</script><rect /></svg>';
+    const sanitized = DOMPurify.sanitize(maliciousSvg, {
+      USE_PROFILES: { svg: true, svgFilters: true },
+    });
+    expect(sanitized).not.toContain("<script>");
+    expect(sanitized).toContain("<rect");
   });
 });

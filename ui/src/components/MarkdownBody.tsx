@@ -1,5 +1,6 @@
 import { isValidElement, useEffect, useId, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
+import DOMPurify from "dompurify";
 import Markdown, { defaultUrlTransform, type Components, type Options } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { cn } from "../lib/utils";
@@ -120,7 +121,12 @@ function MermaidDiagramBlock({ source, darkMode }: { source: string; darkMode: b
         });
         const rendered = await mermaid.render(`paperclip-mermaid-${renderId}`, source);
         if (!active) return;
-        setSvg(rendered.svg);
+
+        const sanitized = DOMPurify.sanitize(rendered.svg, {
+          USE_PROFILES: { svg: true, svgFilters: true },
+        });
+
+        setSvg(sanitized);
       })
       .catch((err) => {
         if (!active) return;
