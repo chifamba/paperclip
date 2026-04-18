@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { formatDatabaseBackupResult, runDatabaseBackup } from "./backup-lib.js";
+import { runDatabaseBackup } from "./backup-lib.js";
 
 type PartialConfig = {
   database?: {
@@ -95,19 +95,13 @@ async function main() {
   const backupDir = resolveBackupDir(config);
   const retentionDays = resolveRetentionDays(config);
 
-  console.log(`Config path: ${configPath}`);
-  console.log(`Backing up database to: ${backupDir}`);
-  console.log(`Retention window: ${retentionDays} day(s)`);
-
   try {
-    const result = await runDatabaseBackup({
+    await runDatabaseBackup({
       connectionString,
       backupDir,
       retention: { dailyDays: retentionDays, weeklyWeeks: 4, monthlyMonths: 1 },
       filenamePrefix: "paperclip",
     });
-
-    console.log(`Backup saved: ${formatDatabaseBackupResult(result)}`);
   } catch (err) {
     console.error("Backup failed.");
     if (err instanceof Error) {
