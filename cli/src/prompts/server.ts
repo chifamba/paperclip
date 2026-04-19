@@ -54,7 +54,8 @@ export async function promptServer(opts?: {
     message: "Server port",
     defaultValue: String(currentServer?.port ?? 3100),
     placeholder: "3100",
-    validate: (val) => {
+    validate: (val: string | undefined) => {
+        if (val === undefined) return;
       const n = Number(val);
       if (isNaN(n) || n < 1 || n > 65535 || !Number.isInteger(n)) {
         return "Must be an integer between 1 and 65535";
@@ -82,7 +83,8 @@ export async function promptServer(opts?: {
         bind === "tailnet"
           ? "your-machine.tailnet.ts.net"
           : "dotta-macbook-pro, host.docker.internal",
-      validate: (val) => {
+      validate: (val: string | undefined) => {
+        if (val === undefined) return;
         try {
           parseHostnameCsv(val);
           return;
@@ -155,7 +157,8 @@ export async function promptServer(opts?: {
     message: "Bind host",
     defaultValue: defaultHost,
     placeholder: defaultHost,
-    validate: (val) => {
+    validate: (val: string | undefined) => {
+        if (val === undefined) return;
       if (!val.trim()) return "Host is required";
       if (deploymentMode === "local_trusted" && !isLoopbackHost(val.trim())) {
         return "Local trusted mode requires a loopback host such as 127.0.0.1";
@@ -171,7 +174,8 @@ export async function promptServer(opts?: {
       message: "Allowed private hostnames (comma-separated, optional)",
       defaultValue: (currentServer?.allowedHostnames ?? []).join(", "),
       placeholder: "dotta-macbook-pro, your-host.tailnet.ts.net",
-      validate: (val) => {
+      validate: (val: string | undefined) => {
+        if (val === undefined) return;
         try {
           parseHostnameCsv(val);
           return;
@@ -191,7 +195,8 @@ export async function promptServer(opts?: {
       message: "Public base URL",
       defaultValue: currentAuth?.publicBaseUrl ?? "",
       placeholder: "https://paperclip.example.com",
-      validate: (val) => {
+      validate: (val: string | undefined) => {
+        if (val === undefined) return;
         const candidate = val.trim();
         if (!candidate) return "Public base URL is required for public exposure";
         try {
