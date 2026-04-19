@@ -1,20 +1,19 @@
 services:
   db:
-    image: postgres:17-alpine
+    image: pgvector/pgvector:pg18-trixie
     environment:
       POSTGRES_USER: paperclip
       POSTGRES_PASSWORD: paperclip
       POSTGRES_DB: paperclip
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U paperclip -d paperclip"]
+      test: [ "CMD-SHELL", "pg_isready -U paperclip -d paperclip" ]
       interval: 2s
       timeout: 5s
       retries: 30
     ports:
       - "5432:5432"
     volumes:
-      - pgdata:/var/lib/postgresql/data
-
+      - /System/Volumes/Data/storage/postgres/paperclip:/var/lib/postgresql
   backend:
     build:
       context: .
@@ -27,10 +26,12 @@ services:
       SERVE_UI: "false"
       PAPERCLIP_DEPLOYMENT_MODE: "authenticated"
       PAPERCLIP_DEPLOYMENT_EXPOSURE: "private"
-      PAPERCLIP_PUBLIC_URL: "${PAPERCLIP_PUBLIC_URL:-http://localhost:80}"
-      BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:-default_secret_for_development_only}"
+      PAPERCLIP_PUBLIC_URL: "${PAPERCLIP_PUBLIC_URL:-http://robertsacstudio.lan:80}"
+      BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:-d2a440f5c5d9413c0a7f9bb35093faa96bc1b8ce7a82faeabd252dacc30e0e351bab111cab37481d91ade13004da9fed5dba95f941cc62ff6087f15156d8c7ef}"
+      ANTHROPIC_AUTH_TOKEN: "${ANTHROPIC_AUTH_TOKEN:-ollama}"
+      ANTHROPIC_BASE_URL: "${ANTHROPIC_BASE_URL:-http://robertsacstudio:11434}"
     volumes:
-      - paperclip-data:/paperclip
+      - /System/Volumes/Data/storage/paperclip:/paperclip
     depends_on:
       db:
         condition: service_healthy
