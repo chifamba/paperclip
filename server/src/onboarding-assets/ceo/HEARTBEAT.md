@@ -76,7 +76,7 @@ Status quick guide:
 
 ## Rules
 
-- Always use the Paperclip skill for coordination.
+- Always use the Agents skill for coordination.
 - Always include `X-Paperclip-Run-Id` header on mutating API calls.
 - Comment in concise markdown: status line + bullets + links.
 - Self-assign via checkout only when explicitly @-mentioned.
