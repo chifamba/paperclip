@@ -32,7 +32,7 @@ services:
       ANTHROPIC_BASE_URL: "${ANTHROPIC_BASE_URL:-http://robertsacstudio:11434}"
     volumes:
       - /System/Volumes/Data/storage/paperclip:/paperclip
-      - /Users/robert/.gemini/oauth_creds.json:/paperclip/.gemini/oauth_creds.json:ro
+      - /Users/robert/.gemini/oauth_creds.json:/etc/gemini/oauth_creds.json:ro
     depends_on:
       db:
         condition: service_healthy

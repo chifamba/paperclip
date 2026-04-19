@@ -26,4 +26,11 @@ if [ "$changed" = "1" ]; then
     chown -R node:node /paperclip
 fi
 
+# Link Gemini credentials if they are mounted
+if [ -f "/etc/gemini/oauth_creds.json" ]; then
+    mkdir -p /paperclip/.gemini
+    ln -sf /etc/gemini/oauth_creds.json /paperclip/.gemini/oauth_creds.json
+    chown -R node:node /paperclip/.gemini
+fi
+
 exec gosu node "$@"
