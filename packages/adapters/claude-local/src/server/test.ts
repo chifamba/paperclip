@@ -80,6 +80,12 @@ export async function testEnvironment(
     if (typeof value === "string") env[key] = value;
   }
   const runtimeEnv = ensurePathInEnv({ ...process.env, ...env });
+
+  // Fallback: Claude Code CLI expects ANTHROPIC_API_KEY, but some users pass ANTHROPIC_AUTH_TOKEN.
+  if (!runtimeEnv.ANTHROPIC_API_KEY && runtimeEnv.ANTHROPIC_AUTH_TOKEN) {
+    (runtimeEnv as Record<string, string>).ANTHROPIC_API_KEY = runtimeEnv.ANTHROPIC_AUTH_TOKEN;
+  }
+
   try {
     await ensureCommandResolvable(command, cwd, runtimeEnv);
     checks.push({

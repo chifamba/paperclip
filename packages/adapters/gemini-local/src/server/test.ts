@@ -72,6 +72,12 @@ export async function testEnvironment(
     if (typeof value === "string") env[key] = value;
   }
   const runtimeEnv = ensurePathInEnv({ ...process.env, ...env });
+
+  // Generic fallback for users passing ANTHROPIC_AUTH_TOKEN as a general "auth token"
+  if (!runtimeEnv.GEMINI_API_KEY && runtimeEnv.ANTHROPIC_AUTH_TOKEN) {
+    (runtimeEnv as Record<string, string>).GEMINI_API_KEY = runtimeEnv.ANTHROPIC_AUTH_TOKEN;
+  }
+
   try {
     await ensureCommandResolvable(command, cwd, runtimeEnv);
     checks.push({

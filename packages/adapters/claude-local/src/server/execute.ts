@@ -334,6 +334,12 @@ export async function execute(ctx: AdapterExecutionContext): Promise<AdapterExec
       (entry): entry is [string, string] => typeof entry[1] === "string",
     ),
   );
+
+  // Fallback: Claude Code CLI expects ANTHROPIC_API_KEY, but some users pass ANTHROPIC_AUTH_TOKEN.
+  if (!effectiveEnv.ANTHROPIC_API_KEY && effectiveEnv.ANTHROPIC_AUTH_TOKEN) {
+    effectiveEnv.ANTHROPIC_API_KEY = effectiveEnv.ANTHROPIC_AUTH_TOKEN;
+  }
+
   const billingType = resolveClaudeBillingType(effectiveEnv);
   const claudeSkillEntries = await readPaperclipRuntimeSkillEntries(config, __moduleDir);
   const desiredSkillNames = new Set(resolveClaudeDesiredSkillNames(config, claudeSkillEntries));
