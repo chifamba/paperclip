@@ -29,14 +29,12 @@ services:
       PAPERCLIP_PUBLIC_URL: "${PAPERCLIP_PUBLIC_URL:-http://robertsacstudio.lan:80}"
       BETTER_AUTH_URL: "${PAPERCLIP_PUBLIC_URL:-http://robertsacstudio.lan:80}"
       BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:-d2a440f5c5d9413c0a7f9bb35093faa96bc1b8ce7a82faeabd252dacc30e0e351bab111cab37481d91ade13004da9fed5dba95f941cc62ff6087f15156d8c7ef}"
-      #ANTHROPIC_AUTH_TOKEN: "${ANTHROPIC_AUTH_TOKEN:-ollama}"
-      #ANTHROPIC_BASE_URL: "${ANTHROPIC_BASE_URL:-http://robertsacstudio:11434}"
-      ANTHROPIC_BASE_URL: "https://openrouter.ai/api"
-      ANTHROPIC_AUTH_TOKEN: "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"
-      ANTHROPIC_DEFAULT_OPUS_MODEL: "nvidia/nemotron-3-super-120b-a12b:free"
-      ANTHROPIC_DEFAULT_SONNET_MODEL: "nvidia/nemotron-3-super-120b-a12b:free"
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: "nvidia/nemotron-3-super-120b-a12b:free"
-      CLAUDE_CODE_SUBAGENT_MODEL: "nvidia/nemotron-3-super-120b-a12b:free"
+      ANTHROPIC_BASE_URL: "http://robertsacstudio:11434"
+      ANTHROPIC_AUTH_TOKEN: "ollama"
+      ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus:4.6"
+      ANTHROPIC_DEFAULT_SONNET_MODEL: "claude-sonnet:4.6"
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: "claude-haiku:4.5"
+      CLAUDE_CODE_SUBAGENT_MODEL: "claude-haiku:4.5"
     volumes:
       - /System/Volumes/Data/storage/paperclip:/paperclip
       - /Users/robert/.gemini/oauth_creds.json:/etc/gemini/oauth_creds.json:ro
