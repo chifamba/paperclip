@@ -178,7 +178,7 @@ export async function testEnvironment(
         args,
         {
           cwd,
-          env,
+          env: runtimeEnv as Record<string, string>,
           timeoutSec: 45,
           graceSec: 5,
           stdin: "Respond with hello.",
