@@ -57,6 +57,22 @@ function executionWorkspaceTabPath(workspaceId: string, tab: ExecutionWorkspaceT
   return `/execution-workspaces/${workspaceId}/${segment}`;
 }
 
+
+function looksLikeRepoUrl(value: string) {
+  const trimmed = value.trim();
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:" && parsed.protocol !== "ssh:") return false;
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    return segments.length >= 2;
+  } catch {
+    if (/^git@[^:]+:[^/]+\/[^/]+/.test(trimmed)) {
+      return true;
+    }
+    return false;
+  }
+}
+
 function isSafeExternalUrl(value: string | null | undefined) {
   if (!value) return false;
   try {
@@ -160,12 +176,8 @@ function buildWorkspacePatch(initialState: WorkspaceFormState, nextState: Worksp
 
 function validateForm(form: WorkspaceFormState) {
   const repoUrl = normalizeText(form.repoUrl);
-  if (repoUrl) {
-    try {
-      new URL(repoUrl);
-    } catch {
-      return "Repo URL must be a valid URL.";
-    }
+  if (repoUrl && !looksLikeRepoUrl(repoUrl)) {
+    return "Repo must be a valid git URL.";
   }
 
   if (!form.inheritRuntime) {
