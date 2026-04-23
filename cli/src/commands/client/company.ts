@@ -789,10 +789,13 @@ export function isHttpUrl(input: string): boolean {
 export function looksLikeRepoUrl(input: string): boolean {
   try {
     const url = new URL(input.trim());
-    if (url.protocol !== "https:") return false;
+    if (url.protocol !== "https:" && url.protocol !== "http:" && url.protocol !== "ssh:") return false;
     const segments = url.pathname.split("/").filter(Boolean);
     return segments.length >= 2;
   } catch {
+    if (/^git@[^:]+:[^/]+\/[^/]+/.test(input.trim())) {
+      return true;
+    }
     return false;
   }
 }
