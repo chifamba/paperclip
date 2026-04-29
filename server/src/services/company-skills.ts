@@ -1030,12 +1030,15 @@ async function readUrlSkillImports(
   const warnings: string[] = [];
   const looksLikeRepoUrl = (() => { try {
     const parsed = new URL(url);
-    if (parsed.protocol !== "https:") return false;
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:" && parsed.protocol !== "ssh:") return false;
     const h = parsed.hostname.toLowerCase();
     if (h.endsWith(".githubusercontent.com") || h === "gist.github.com") return false;
     const segments = parsed.pathname.split("/").filter(Boolean);
     return segments.length >= 2 && !parsed.pathname.endsWith(".md");
-  } catch { return false; } })();
+  } catch {
+    if (/^git@[^:]+:[^/]+\/[^/]+/.test(url.trim())) return true;
+    return false;
+  } })();
   if (looksLikeRepoUrl) {
     const parsed = parseGitHubSourceUrl(url);
     const apiBase = gitHubApiBase(parsed.hostname);

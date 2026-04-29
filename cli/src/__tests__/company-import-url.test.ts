@@ -1,3 +1,9 @@
+import { vi } from "vitest";
+
+vi.mock("@clack/prompts", () => ({ log: { step: vi.fn(), info: vi.fn(), warn: vi.fn() }, spinner: () => ({ start: vi.fn(), stop: vi.fn() }) }));
+vi.mock("@paperclipai/client", () => ({ createClient: vi.fn() }));
+vi.mock("open", () => ({ default: vi.fn() }));
+
 import { describe, expect, it } from "vitest";
 import {
   isGithubShorthand,
@@ -26,8 +32,24 @@ describe("looksLikeRepoUrl", () => {
     expect(looksLikeRepoUrl("https://github.com/org/repo")).toBe(true);
   });
 
+  it("matches Bitbucket URLs", () => {
+    expect(looksLikeRepoUrl("https://bitbucket.org/org/repo")).toBe(true);
+  });
+
+  it("matches internal Git HTTP URLs", () => {
+    expect(looksLikeRepoUrl("http://my-git.internal/org/repo")).toBe(true);
+  });
+
+  it("matches SSH git URLs", () => {
+    expect(looksLikeRepoUrl("ssh://git@github.com/org/repo.git")).toBe(true);
+    expect(looksLikeRepoUrl("git@github.com:org/repo.git")).toBe(true);
+    expect(looksLikeRepoUrl("git@bitbucket.org:org/repo.git")).toBe(true);
+    expect(looksLikeRepoUrl("git@gitlab.internal.com:group/project.git")).toBe(true);
+  });
+
   it("rejects URLs without owner/repo path", () => {
     expect(looksLikeRepoUrl("https://example.com/foo")).toBe(false);
+    expect(looksLikeRepoUrl("https://github.com/org")).toBe(false);
   });
 
   it("rejects local paths", () => {
