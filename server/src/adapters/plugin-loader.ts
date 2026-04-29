@@ -10,6 +10,7 @@
  */
 
 import fs from "node:fs";
+import { readFile, access } from "node:fs/promises";
 import path from "node:path";
 import type { ServerAdapterModule } from "./types.js";
 import { logger } from "../middleware/logger.js";
@@ -35,7 +36,7 @@ export function getUiParserSource(adapterType: string): string | undefined {
  * On cache miss, attempt on-demand extraction from the plugin store.
  * Makes the ui-parser.js endpoint self-healing.
  */
-export function getOrExtractUiParserSource(adapterType: string): string | undefined {
+export async function getOrExtractUiParserSource(adapterType: string): Promise<string | undefined> {
   const cached = uiParserCache.get(adapterType);
   if (cached) return cached;
 
@@ -43,7 +44,7 @@ export function getOrExtractUiParserSource(adapterType: string): string | undefi
   if (!record) return undefined;
 
   const packageDir = resolvePackageDir(record);
-  const source = extractUiParserSource(packageDir, record.packageName);
+  const source = await extractUiParserSource(packageDir, record.packageName);
   if (source) {
     uiParserCache.set(adapterType, source);
     logger.info(
@@ -64,9 +65,9 @@ function resolvePackageDir(record: Pick<AdapterPluginRecord, "localPath" | "pack
     : path.resolve(getAdapterPluginsDir(), "node_modules", record.packageName);
 }
 
-function resolvePackageEntryPoint(packageDir: string): string {
+async function resolvePackageEntryPoint(packageDir: string): Promise<string> {
   const pkgJsonPath = path.join(packageDir, "package.json");
-  const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8"));
+  const pkg = JSON.parse(await readFile(pkgJsonPath, "utf-8"));
 
   if (pkg.exports && typeof pkg.exports === "object" && pkg.exports["."]) {
     const exp = pkg.exports["."];
@@ -81,12 +82,12 @@ function resolvePackageEntryPoint(packageDir: string): string {
 
 const SUPPORTED_PARSER_CONTRACT = "1";
 
-function extractUiParserSource(
+async function extractUiParserSource(
   packageDir: string,
   packageName: string,
-): string | undefined {
+): Promise<string | undefined> {
   const pkgJsonPath = path.join(packageDir, "package.json");
-  const pkg = JSON.parse(fs.readFileSync(pkgJsonPath, "utf-8"));
+  const pkg = JSON.parse(await readFile(pkgJsonPath, "utf-8"));
 
   if (!pkg.exports || typeof pkg.exports !== "object" || !pkg.exports["./ui-parser"]) {
     return undefined;
@@ -123,12 +124,14 @@ function extractUiParserSource(
     return undefined;
   }
 
-  if (!fs.existsSync(uiParserPath)) {
+  try {
+    await access(uiParserPath);
+  } catch {
     return undefined;
   }
 
   try {
-    const source = fs.readFileSync(uiParserPath, "utf-8");
+    const source = await readFile(uiParserPath, "utf-8");
     logger.info(
       { packageName, uiParserFile, size: source.length },
       `Loaded UI parser from adapter package${contractVersion ? "" : " (no version declared)"}`,
@@ -171,9 +174,9 @@ export async function loadExternalAdapterPackage(
     ? path.resolve(localPath)
     : path.resolve(getAdapterPluginsDir(), "node_modules", packageName);
 
-  const entryPoint = resolvePackageEntryPoint(packageDir);
+  const entryPoint = await resolvePackageEntryPoint(packageDir);
   const modulePath = path.resolve(packageDir, entryPoint);
-  const uiParserSource = extractUiParserSource(packageDir, packageName);
+  const uiParserSource = await extractUiParserSource(packageDir, packageName);
 
   logger.info({ packageName, packageDir, entryPoint, modulePath, hasUiParser: !!uiParserSource }, "Loading external adapter package");
 
@@ -210,7 +213,7 @@ export async function reloadExternalAdapter(
   if (!record) return null;
 
   const packageDir = resolvePackageDir(record);
-  const entryPoint = resolvePackageEntryPoint(packageDir);
+  const entryPoint = await resolvePackageEntryPoint(packageDir);
   const modulePath = path.resolve(packageDir, entryPoint);
   const fileUrl = `file://${modulePath}`;
 
@@ -239,7 +242,7 @@ export async function reloadExternalAdapter(
   const adapterModule = validateAdapterModule(mod, record.packageName);
 
   uiParserCache.delete(type);
-  const uiParserSource = extractUiParserSource(packageDir, record.packageName);
+  const uiParserSource = await extractUiParserSource(packageDir, record.packageName);
   if (uiParserSource) {
     uiParserCache.set(adapterModule.type, uiParserSource);
   }

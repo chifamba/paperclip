@@ -650,10 +650,10 @@ export function adapterRoutes() {
   //
   // The adapter package must export a "./ui-parser" entry in package.json
   // pointing to a self-contained ESM module with zero runtime dependencies.
-  router.get("/adapters/:type/ui-parser.js", (req, res) => {
+  router.get("/adapters/:type/ui-parser.js", async (req, res) => {
     assertBoardOrgAccess(req);
     const { type } = req.params;
-    const source = getOrExtractUiParserSource(type);
+    const source = await getOrExtractUiParserSource(type);
     if (!source) {
       res.status(404).json({ error: `No UI parser available for adapter "${type}".` });
       return;
