@@ -145,7 +145,7 @@ function buildAdapterInfo(adapter: ServerAdapterModule, externalRecord: AdapterP
  * - Windows paths (e.g., "C:\\Users\\...") are converted via `wslpath -u`.
  * - Paths already starting with `/mnt/` or `/` are returned as-is.
  */
-async function normalizeLocalPath(rawPath: string): Promise<string> {
+export async function normalizeLocalPath(rawPath: string): Promise<string> {
   // Already a POSIX path (WSL or native Linux)
   if (rawPath.startsWith("/")) {
     return rawPath;
@@ -154,7 +154,7 @@ async function normalizeLocalPath(rawPath: string): Promise<string> {
   // Windows path detection: C:\ or C:/ pattern
   if (/^[A-Za-z]:[\\/]/.test(rawPath)) {
     try {
-      const { stdout } = await execFileAsync("wslpath", ["-u", rawPath]);
+      const { stdout } = await execFileAsync("wslpath", ["-u", "--", rawPath]);
       return stdout.trim();
     } catch (err) {
       logger.warn({ err, rawPath }, "wslpath conversion failed; using path as-is");
