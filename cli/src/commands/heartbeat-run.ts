@@ -99,7 +99,6 @@ export async function heartbeatRun(opts: HeartbeatRunOptions): Promise<void> {
   }
 
   const run = invokeRes as HeartbeatRun;
-  console.log(pc.cyan(`Invoked heartbeat run ${run.id} for agent ${agent.name} (${agent.id})`));
 
   const runId = run.id;
   let activeRunId: string | null = null;
