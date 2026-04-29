@@ -1,9 +1,11 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from "vitest";
 import { writeContext } from "../client/context.js";
-import { resolveCommandContext } from "../commands/client/common.js";
+import { resolveCommandContext, handleCommandError } from "../commands/client/common.js";
+import { ApiRequestError } from "../client/http.js";
+import pc from "picocolors";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -94,5 +96,60 @@ describe("resolveCommandContext", () => {
     expect(() =>
       resolveCommandContext({ context: contextPath, apiBase: "http://localhost:3100" }, { requireCompany: true }),
     ).toThrow(/Company ID is required/);
+  });
+});
+
+describe("handleCommandError", () => {
+  let exitMock: MockInstance;
+  let errorMock: MockInstance;
+
+  beforeEach(() => {
+    exitMock = vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
+    errorMock = vi.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("handles ApiRequestError without details", () => {
+    const error = new ApiRequestError(404, "Not Found");
+    handleCommandError(error);
+
+    expect(errorMock).toHaveBeenCalledWith(pc.red("API error 404: Not Found"));
+    expect(exitMock).toHaveBeenCalledWith(1);
+  });
+
+  it("handles ApiRequestError with details", () => {
+    const details = { field: "name", error: "Required" };
+    const error = new ApiRequestError(400, "Bad Request", details);
+    handleCommandError(error);
+
+    expect(errorMock).toHaveBeenCalledWith(
+      pc.red(`API error 400: Bad Request details=${JSON.stringify(details)}`)
+    );
+    expect(exitMock).toHaveBeenCalledWith(1);
+  });
+
+  it("handles generic Error", () => {
+    const error = new Error("Something went wrong");
+    handleCommandError(error);
+
+    expect(errorMock).toHaveBeenCalledWith(pc.red("Something went wrong"));
+    expect(exitMock).toHaveBeenCalledWith(1);
+  });
+
+  it("handles non-error objects", () => {
+    handleCommandError({ code: 123, message: "Custom error" });
+
+    expect(errorMock).toHaveBeenCalledWith(pc.red("[object Object]"));
+    expect(exitMock).toHaveBeenCalledWith(1);
+  });
+
+  it("handles primitive strings", () => {
+    handleCommandError("A string error");
+
+    expect(errorMock).toHaveBeenCalledWith(pc.red("A string error"));
+    expect(exitMock).toHaveBeenCalledWith(1);
   });
 });
