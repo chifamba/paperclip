@@ -1060,6 +1060,128 @@ export async function ensureCommandResolvable(command: string, cwd: string, env:
   throw new Error(`Command not found in PATH: "${command}"`);
 }
 
+function prepareEnvironment(optsEnv: Record<string, string>): NodeJS.ProcessEnv {
+  const rawMerged: NodeJS.ProcessEnv = { ...process.env, ...optsEnv };
+
+  // Strip Claude Code nesting-guard env vars so spawned `claude` processes
+  // don't refuse to start with "cannot be launched inside another session".
+  // These vars leak in when the Paperclip server itself is started from
+  // within a Claude Code session (e.g. `npx paperclipai run` in a terminal
+  // owned by Claude Code) or when cron inherits a contaminated shell env.
+  const CLAUDE_CODE_NESTING_VARS = [
+    "CLAUDECODE",
+    "CLAUDE_CODE_ENTRYPOINT",
+    "CLAUDE_CODE_SESSION",
+    "CLAUDE_CODE_PARENT_SESSION",
+  ] as const;
+  for (const key of CLAUDE_CODE_NESTING_VARS) {
+    delete rawMerged[key];
+  }
+
+  return ensurePathInEnv(rawMerged);
+}
+
+function handleProcessSpawn(
+  child: ChildProcessWithEvents,
+  runId: string,
+  processGroupId: number | null,
+  startedAt: string,
+  graceSec: number,
+  onSpawn: ((meta: { pid: number; processGroupId: number | null; startedAt: string }) => Promise<void>) | undefined,
+  onLogError: (err: unknown, runId: string, message: string) => void,
+): Promise<void> {
+  const spawnPersistPromise =
+    typeof child.pid === "number" && child.pid > 0 && onSpawn
+      ? onSpawn({ pid: child.pid, processGroupId, startedAt }).catch((err) => {
+          onLogError(err, runId, "failed to record child process metadata");
+        })
+      : Promise.resolve();
+
+  runningProcesses.set(runId, { child, graceSec, processGroupId });
+  return spawnPersistPromise;
+}
+
+function setupProcessTimeout(
+  child: ChildProcessWithEvents,
+  processGroupId: number | null,
+  timeoutSec: number,
+  graceSec: number,
+) {
+  let timedOut = false;
+  const timeout =
+    timeoutSec > 0
+      ? setTimeout(() => {
+          timedOut = true;
+          signalRunningProcess({ child, processGroupId }, "SIGTERM");
+          setTimeout(() => {
+            signalRunningProcess({ child, processGroupId }, "SIGKILL");
+          }, Math.max(1, graceSec) * 1000);
+        }, timeoutSec * 1000)
+      : null;
+
+  return {
+    clear: () => {
+      if (timeout) clearTimeout(timeout);
+    },
+    isTimedOut: () => timedOut,
+  };
+}
+
+function setupProcessIO(
+  child: ChildProcessWithEvents,
+  runId: string,
+  opts: {
+    onLog: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
+    stdin?: string;
+  },
+  spawnPersistPromise: Promise<void>,
+  onLogError: (err: unknown, runId: string, message: string) => void,
+) {
+  let stdout = "";
+  let stderr = "";
+  let logChain: Promise<void> = Promise.resolve();
+
+  child.stdout?.on("data", (chunk: unknown) => {
+    const text = String(chunk);
+    stdout = appendWithCap(stdout, text);
+    logChain = logChain
+      .then(() => opts.onLog("stdout", text))
+      .catch((err) => onLogError(err, runId, "failed to append stdout log chunk"));
+  });
+
+  child.stderr?.on("data", (chunk: unknown) => {
+    const text = String(chunk);
+    stderr = appendWithCap(stderr, text);
+    logChain = logChain
+      .then(() => opts.onLog("stderr", text))
+      .catch((err) => onLogError(err, runId, "failed to append stderr log chunk"));
+  });
+
+  const stdin = child.stdin;
+  if (opts.stdin != null && stdin) {
+    void spawnPersistPromise.finally(() => {
+      if (child.killed || stdin.destroyed) return;
+      stdin.write(opts.stdin as string);
+      stdin.end();
+    });
+  }
+
+  return {
+    get logChain() { return logChain; },
+    getStdout: () => stdout,
+    getStderr: () => stderr,
+  };
+}
+
+function getProcessErrorMsg(err: Error, command: string, cwd: string, mergedEnv: NodeJS.ProcessEnv): string {
+  const errno = (err as NodeJS.ErrnoException).code;
+  const pathValue = mergedEnv.PATH ?? mergedEnv.Path ?? "";
+  if (errno === "ENOENT") {
+    return `Failed to start command "${command}" in "${cwd}". Verify adapter command, working directory, and PATH (${pathValue}).`;
+  }
+  return `Failed to start command "${command}" in "${cwd}": ${err.message}`;
+}
+
 export async function runChildProcess(
   runId: string,
   command: string,
@@ -1077,25 +1199,9 @@ export async function runChildProcess(
 ): Promise<RunProcessResult> {
   const onLogError = opts.onLogError ?? ((err, id, msg) => console.warn({ err, runId: id }, msg));
 
+  const mergedEnv = prepareEnvironment(opts.env);
+
   return new Promise<RunProcessResult>((resolve, reject) => {
-    const rawMerged: NodeJS.ProcessEnv = { ...process.env, ...opts.env };
-
-    // Strip Claude Code nesting-guard env vars so spawned `claude` processes
-    // don't refuse to start with "cannot be launched inside another session".
-    // These vars leak in when the Paperclip server itself is started from
-    // within a Claude Code session (e.g. `npx paperclipai run` in a terminal
-    // owned by Claude Code) or when cron inherits a contaminated shell env.
-    const CLAUDE_CODE_NESTING_VARS = [
-      "CLAUDECODE",
-      "CLAUDE_CODE_ENTRYPOINT",
-      "CLAUDE_CODE_SESSION",
-      "CLAUDE_CODE_PARENT_SESSION",
-    ] as const;
-    for (const key of CLAUDE_CODE_NESTING_VARS) {
-      delete rawMerged[key];
-    }
-
-    const mergedEnv = ensurePathInEnv(rawMerged);
     void resolveSpawnTarget(command, args, opts.cwd, mergedEnv)
       .then((target) => {
         const child = spawn(target.command, target.args, {
@@ -1108,78 +1214,35 @@ export async function runChildProcess(
         const startedAt = new Date().toISOString();
         const processGroupId = resolveProcessGroupId(child);
 
-        const spawnPersistPromise =
-          typeof child.pid === "number" && child.pid > 0 && opts.onSpawn
-            ? opts.onSpawn({ pid: child.pid, processGroupId, startedAt }).catch((err) => {
-              onLogError(err, runId, "failed to record child process metadata");
-            })
-            : Promise.resolve();
+        const spawnPersistPromise = handleProcessSpawn(
+          child,
+          runId,
+          processGroupId,
+          startedAt,
+          opts.graceSec,
+          opts.onSpawn,
+          onLogError
+        );
 
-        runningProcesses.set(runId, { child, graceSec: opts.graceSec, processGroupId });
-
-        let timedOut = false;
-        let stdout = "";
-        let stderr = "";
-        let logChain: Promise<void> = Promise.resolve();
-
-        const timeout =
-          opts.timeoutSec > 0
-            ? setTimeout(() => {
-                timedOut = true;
-                signalRunningProcess({ child, processGroupId }, "SIGTERM");
-                setTimeout(() => {
-                  signalRunningProcess({ child, processGroupId }, "SIGKILL");
-                }, Math.max(1, opts.graceSec) * 1000);
-              }, opts.timeoutSec * 1000)
-            : null;
-
-        child.stdout?.on("data", (chunk: unknown) => {
-          const text = String(chunk);
-          stdout = appendWithCap(stdout, text);
-          logChain = logChain
-            .then(() => opts.onLog("stdout", text))
-            .catch((err) => onLogError(err, runId, "failed to append stdout log chunk"));
-        });
-
-        child.stderr?.on("data", (chunk: unknown) => {
-          const text = String(chunk);
-          stderr = appendWithCap(stderr, text);
-          logChain = logChain
-            .then(() => opts.onLog("stderr", text))
-            .catch((err) => onLogError(err, runId, "failed to append stderr log chunk"));
-        });
-
-        const stdin = child.stdin;
-        if (opts.stdin != null && stdin) {
-          void spawnPersistPromise.finally(() => {
-            if (child.killed || stdin.destroyed) return;
-            stdin.write(opts.stdin as string);
-            stdin.end();
-          });
-        }
+        const timeoutState = setupProcessTimeout(child, processGroupId, opts.timeoutSec, opts.graceSec);
+        const ioState = setupProcessIO(child, runId, opts, spawnPersistPromise, onLogError);
 
         child.on("error", (err: Error) => {
-          if (timeout) clearTimeout(timeout);
+          timeoutState.clear();
           runningProcesses.delete(runId);
-          const errno = (err as NodeJS.ErrnoException).code;
-          const pathValue = mergedEnv.PATH ?? mergedEnv.Path ?? "";
-          const msg =
-            errno === "ENOENT"
-              ? `Failed to start command "${command}" in "${opts.cwd}". Verify adapter command, working directory, and PATH (${pathValue}).`
-              : `Failed to start command "${command}" in "${opts.cwd}": ${err.message}`;
-          reject(new Error(msg));
+          reject(new Error(getProcessErrorMsg(err, command, opts.cwd, mergedEnv)));
         });
 
         child.on("close", (code: number | null, signal: NodeJS.Signals | null) => {
-          if (timeout) clearTimeout(timeout);
+          timeoutState.clear();
           runningProcesses.delete(runId);
-          void logChain.finally(() => {
+          void ioState.logChain.finally(() => {
             resolve({
               exitCode: code,
               signal,
-              timedOut,
-              stdout,
-              stderr,
+              timedOut: timeoutState.isTimedOut(),
+              stdout: ioState.getStdout(),
+              stderr: ioState.getStderr(),
               pid: child.pid ?? null,
               startedAt,
             });
