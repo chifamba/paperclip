@@ -28,6 +28,8 @@ import {
   worktreeInitCommand,
   worktreeMakeCommand,
   worktreeReseedCommand,
+  worktreeListCommand,
+  WorktreeListOptions,
 } from "../commands/worktree.js";
 import {
   buildWorktreeConfig,
@@ -1180,4 +1182,97 @@ describeEmbeddedPostgres("pauseSeededScheduledRoutines", () => {
       await tempDb.cleanup();
     }
   }, 20_000);
+});
+
+describe("worktreeListCommand", () => {
+  it("lists worktrees in text format", async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-worktree-list-"));
+    const repoRoot = path.join(tempRoot, "repo");
+    const newWorktree = path.join(tempRoot, "new-worktree");
+    const originalCwd = process.cwd();
+
+    try {
+      fs.mkdirSync(repoRoot, { recursive: true });
+      execFileSync("git", ["init"], { cwd: repoRoot, stdio: "ignore" });
+      execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repoRoot, stdio: "ignore" });
+      execFileSync("git", ["config", "user.name", "Test User"], { cwd: repoRoot, stdio: "ignore" });
+      fs.writeFileSync(path.join(repoRoot, "README.md"), "# temp\n", "utf8");
+      execFileSync("git", ["add", "README.md"], { cwd: repoRoot, stdio: "ignore" });
+      execFileSync("git", ["commit", "-m", "Initial commit"], { cwd: repoRoot, stdio: "ignore" });
+
+      execFileSync("git", ["branch", "feature-branch"], { cwd: repoRoot, stdio: "ignore" });
+      execFileSync("git", ["worktree", "add", newWorktree, "feature-branch"], { cwd: repoRoot, stdio: "ignore" });
+
+      fs.mkdirSync(path.join(repoRoot, ".paperclip"), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, ".paperclip", "config.json"), "{}", "utf8");
+
+      process.chdir(repoRoot);
+
+      const p = await import("@clack/prompts");
+      const logMessageSpy = vi.spyOn(p.log, "message").mockImplementation(() => {});
+
+      await worktreeListCommand({ json: false });
+
+      expect(logMessageSpy).toHaveBeenCalled();
+      const messages = logMessageSpy.mock.calls.map(call => call[0]);
+
+      expect(messages.some(msg => typeof msg === "string" && msg.includes("master") && msg.includes("[current, paperclip]"))).toBe(true);
+      expect(messages.some(msg => typeof msg === "string" && msg.includes("feature-branch") && msg.includes("[no-paperclip-config]"))).toBe(true);
+
+      logMessageSpy.mockRestore();
+    } finally {
+      process.chdir(originalCwd);
+      fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("lists worktrees in JSON format", async () => {
+    const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "paperclip-worktree-list-json-"));
+    const repoRoot = path.join(tempRoot, "repo");
+    const newWorktree = path.join(tempRoot, "new-worktree");
+    const originalCwd = process.cwd();
+
+    try {
+      fs.mkdirSync(repoRoot, { recursive: true });
+      execFileSync("git", ["init"], { cwd: repoRoot, stdio: "ignore" });
+      execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repoRoot, stdio: "ignore" });
+      execFileSync("git", ["config", "user.name", "Test User"], { cwd: repoRoot, stdio: "ignore" });
+      fs.writeFileSync(path.join(repoRoot, "README.md"), "# temp\n", "utf8");
+      execFileSync("git", ["add", "README.md"], { cwd: repoRoot, stdio: "ignore" });
+      execFileSync("git", ["commit", "-m", "Initial commit"], { cwd: repoRoot, stdio: "ignore" });
+
+      execFileSync("git", ["branch", "feature-branch-json"], { cwd: repoRoot, stdio: "ignore" });
+      execFileSync("git", ["worktree", "add", newWorktree, "feature-branch-json"], { cwd: repoRoot, stdio: "ignore" });
+
+      fs.mkdirSync(path.join(repoRoot, ".paperclip"), { recursive: true });
+      fs.writeFileSync(path.join(repoRoot, ".paperclip", "config.json"), "{}", "utf8");
+
+      process.chdir(repoRoot);
+
+      const consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+
+      await worktreeListCommand({ json: true });
+
+      expect(consoleLogSpy).toHaveBeenCalled();
+      const output = consoleLogSpy.mock.calls[0][0];
+      const parsed = JSON.parse(output);
+
+      expect(parsed.length).toBe(2);
+
+      const masterWorktree = parsed.find((w: any) => w.branchLabel === "master");
+      expect(masterWorktree).toBeDefined();
+      expect(masterWorktree.hasPaperclipConfig).toBe(true);
+      expect(masterWorktree.isCurrent).toBe(true);
+
+      const featureWorktree = parsed.find((w: any) => w.branchLabel === "feature-branch-json");
+      expect(featureWorktree).toBeDefined();
+      expect(featureWorktree.hasPaperclipConfig).toBe(false);
+      expect(featureWorktree.isCurrent).toBe(false);
+
+      consoleLogSpy.mockRestore();
+    } finally {
+      process.chdir(originalCwd);
+      fs.rmSync(tempRoot, { recursive: true, force: true });
+    }
+  });
 });
