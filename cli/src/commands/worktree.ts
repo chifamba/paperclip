@@ -105,7 +105,7 @@ type WorktreeEnvOptions = {
   json?: boolean;
 };
 
-type WorktreeListOptions = {
+export type WorktreeListOptions = {
   json?: boolean;
 };
 
