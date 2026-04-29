@@ -383,34 +383,15 @@ export function stringifyPaperclipWakePayload(value: unknown): string | null {
   return JSON.stringify(normalized);
 }
 
-export function renderPaperclipWakePrompt(
-  value: unknown,
-  options: { resumedSession?: boolean } = {},
-): string {
-  const normalized = normalizePaperclipWakePayload(value);
-  if (!normalized) return "";
-  const resumedSession = options.resumedSession === true;
-  const executionStage = normalized.executionStage;
-  const principalLabel = (principal: PaperclipWakeExecutionPrincipal | null) => {
-    if (!principal || !principal.type) return "unknown";
-    if (principal.type === "agent") return principal.agentId ? `agent ${principal.agentId}` : "agent";
-    return principal.userId ? `user ${principal.userId}` : "user";
-  };
-
-  const lines = resumedSession
-      ? [
+function buildWakeHeader(normalized: PaperclipWakePayload, resumedSession: boolean): string[] {
+  const baseHeader = resumedSession
+    ? [
         "## Paperclip Resume Delta",
         "",
         "You are resuming an existing Paperclip session.",
         "This heartbeat is scoped to the issue below. Do not switch to another issue until you have handled this wake.",
         "Focus on the new wake delta below and continue the current task without restating the full heartbeat boilerplate.",
         "Fetch the API thread only when `fallbackFetchNeeded` is true or you need broader history than this batch.",
-        "",
-        `- reason: ${normalized.reason ?? "unknown"}`,
-        `- issue: ${normalized.issue?.identifier ?? normalized.issue?.id ?? "unknown"}${normalized.issue?.title ? ` ${normalized.issue.title}` : ""}`,
-        `- pending comments: ${normalized.includedCount}/${normalized.requestedCount}`,
-        `- latest comment id: ${normalized.latestCommentId ?? "unknown"}`,
-        `- fallback fetch needed: ${normalized.fallbackFetchNeeded ? "yes" : "no"}`,
       ]
     : [
         "## Paperclip Wake Payload",
@@ -420,13 +401,86 @@ export function renderPaperclipWakePrompt(
         "Before generic repo exploration or boilerplate heartbeat updates, acknowledge the latest comment and explain how it changes your next action.",
         "Use this inline wake data first before refetching the issue thread.",
         "Only fetch the API thread when `fallbackFetchNeeded` is true or you need broader history than this batch.",
-        "",
-        `- reason: ${normalized.reason ?? "unknown"}`,
-        `- issue: ${normalized.issue?.identifier ?? normalized.issue?.id ?? "unknown"}${normalized.issue?.title ? ` ${normalized.issue.title}` : ""}`,
-        `- pending comments: ${normalized.includedCount}/${normalized.requestedCount}`,
-        `- latest comment id: ${normalized.latestCommentId ?? "unknown"}`,
-        `- fallback fetch needed: ${normalized.fallbackFetchNeeded ? "yes" : "no"}`,
       ];
+
+  return [
+    ...baseHeader,
+    "",
+    `- reason: ${normalized.reason ?? "unknown"}`,
+    `- issue: ${normalized.issue?.identifier ?? normalized.issue?.id ?? "unknown"}${normalized.issue?.title ? ` ${normalized.issue.title}` : ""}`,
+    `- pending comments: ${normalized.includedCount}/${normalized.requestedCount}`,
+    `- latest comment id: ${normalized.latestCommentId ?? "unknown"}`,
+    `- fallback fetch needed: ${normalized.fallbackFetchNeeded ? "yes" : "no"}`,
+  ];
+}
+
+function buildExecutionStageInfo(lines: string[], executionStage: PaperclipWakeExecutionStage | null) {
+  if (!executionStage) return;
+
+  const principalLabel = (principal: PaperclipWakeExecutionPrincipal | null) => {
+    if (!principal || !principal.type) return "unknown";
+    if (principal.type === "agent") return principal.agentId ? `agent ${principal.agentId}` : "agent";
+    return principal.userId ? `user ${principal.userId}` : "user";
+  };
+
+  lines.push(
+    `- execution wake role: ${executionStage.wakeRole ?? "unknown"}`,
+    `- execution stage: ${executionStage.stageType ?? "unknown"}`,
+    `- execution participant: ${principalLabel(executionStage.currentParticipant)}`,
+    `- execution return assignee: ${principalLabel(executionStage.returnAssignee)}`,
+    `- last decision outcome: ${executionStage.lastDecisionOutcome ?? "none"}`,
+  );
+
+  if (executionStage.allowedActions.length > 0) {
+    lines.push(`- allowed actions: ${executionStage.allowedActions.join(", ")}`);
+  }
+  lines.push("");
+
+  if (executionStage.wakeRole === "reviewer" || executionStage.wakeRole === "approver") {
+    lines.push(
+      `You are waking as the active ${executionStage.wakeRole} for this issue.`,
+      "Do not execute the task itself or continue executor work.",
+      "Review the issue and choose one of the allowed actions above.",
+      "If you request changes, the workflow routes back to the stored return assignee.",
+      "",
+    );
+  } else if (executionStage.wakeRole === "executor") {
+    lines.push(
+      "You are waking because changes were requested in the execution workflow.",
+      "Address the requested changes on this issue and resubmit when the work is ready.",
+      "",
+    );
+  }
+}
+
+function buildCommentsInfo(lines: string[], comments: PaperclipWakeComment[]) {
+  if (comments.length === 0) return;
+
+  lines.push("New comments in order:");
+
+  for (const [index, comment] of comments.entries()) {
+    const authorLabel = comment.authorId
+      ? `${comment.authorType ?? "unknown"} ${comment.authorId}`
+      : comment.authorType ?? "unknown";
+    lines.push(
+      `${index + 1}. comment ${comment.id ?? "unknown"} at ${comment.createdAt ?? "unknown"} by ${authorLabel}`,
+      comment.body,
+    );
+    if (comment.bodyTruncated) {
+      lines.push("[comment body truncated]");
+    }
+    lines.push("");
+  }
+}
+
+export function renderPaperclipWakePrompt(
+  value: unknown,
+  options: { resumedSession?: boolean } = {},
+): string {
+  const normalized = normalizePaperclipWakePayload(value);
+  if (!normalized) return "";
+
+  const lines = buildWakeHeader(normalized, options.resumedSession === true);
 
   if (normalized.issue?.status) {
     lines.push(`- issue status: ${normalized.issue.status}`);
@@ -441,34 +495,7 @@ export function renderPaperclipWakePrompt(
     lines.push(`- omitted comments: ${normalized.missingCount}`);
   }
 
-  if (executionStage) {
-    lines.push(
-      `- execution wake role: ${executionStage.wakeRole ?? "unknown"}`,
-      `- execution stage: ${executionStage.stageType ?? "unknown"}`,
-      `- execution participant: ${principalLabel(executionStage.currentParticipant)}`,
-      `- execution return assignee: ${principalLabel(executionStage.returnAssignee)}`,
-      `- last decision outcome: ${executionStage.lastDecisionOutcome ?? "none"}`,
-    );
-    if (executionStage.allowedActions.length > 0) {
-      lines.push(`- allowed actions: ${executionStage.allowedActions.join(", ")}`);
-    }
-    lines.push("");
-    if (executionStage.wakeRole === "reviewer" || executionStage.wakeRole === "approver") {
-      lines.push(
-        `You are waking as the active ${executionStage.wakeRole} for this issue.`,
-        "Do not execute the task itself or continue executor work.",
-        "Review the issue and choose one of the allowed actions above.",
-        "If you request changes, the workflow routes back to the stored return assignee.",
-        "",
-      );
-    } else if (executionStage.wakeRole === "executor") {
-      lines.push(
-        "You are waking because changes were requested in the execution workflow.",
-        "Address the requested changes on this issue and resubmit when the work is ready.",
-        "",
-      );
-    }
-  }
+  buildExecutionStageInfo(lines, normalized.executionStage);
 
   if (normalized.checkedOutByHarness) {
     lines.push(
@@ -479,23 +506,7 @@ export function renderPaperclipWakePrompt(
     );
   }
 
-  if (normalized.comments.length > 0) {
-    lines.push("New comments in order:");
-  }
-
-  for (const [index, comment] of normalized.comments.entries()) {
-    const authorLabel = comment.authorId
-      ? `${comment.authorType ?? "unknown"} ${comment.authorId}`
-      : comment.authorType ?? "unknown";
-    lines.push(
-      `${index + 1}. comment ${comment.id ?? "unknown"} at ${comment.createdAt ?? "unknown"} by ${authorLabel}`,
-      comment.body,
-    );
-    if (comment.bodyTruncated) {
-      lines.push("[comment body truncated]");
-    }
-    lines.push("");
-  }
+  buildCommentsInfo(lines, normalized.comments);
 
   return lines.join("\n").trim();
 }
