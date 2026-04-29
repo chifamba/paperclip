@@ -2034,8 +2034,11 @@ async function startLocalRuntimeService(input: {
     onLog: input.onLog,
   });
 
+  const repoRoot = await resolveGitOwnerRepoRoot(input.workspace.baseCwd).catch(() => input.workspace.baseCwd);
+  const resolvedCommand = resolveRepoManagedWorkspaceCommand(command, repoRoot);
+
   const shell = resolveShell();
-  const child = spawn(shell, ["-lc", command], {
+  const child = spawn(shell, ["-lc", resolvedCommand], {
     cwd: serviceCwd,
     env,
     detached: process.platform !== "win32",

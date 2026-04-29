@@ -25,6 +25,27 @@ function collectWorkspaceStrategyCommandPaths(raw: unknown, prefix: string): str
   return paths;
 }
 
+function collectWorkspaceRuntimeCommandPaths(raw: unknown, prefix: string): string[] {
+  if (!isRecord(raw)) return [];
+  const paths: string[] = [];
+  const runtime = raw.workspaceRuntime;
+  if (!isRecord(runtime)) return [];
+
+  const keys: Array<"commands" | "services" | "jobs"> = ["commands", "services", "jobs"];
+  for (const key of keys) {
+    const entries = runtime[key];
+    if (Array.isArray(entries)) {
+      for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+        if (isRecord(entry) && hasOwn(entry, "command")) {
+          paths.push(prefixPath(prefix, `workspaceRuntime.${key}.${i}.command`));
+        }
+      }
+    }
+  }
+  return paths;
+}
+
 function collectExecutionWorkspaceConfigCommandPaths(raw: unknown, prefix: string): string[] {
   if (!isRecord(raw)) return [];
   const paths: string[] = [];
@@ -37,6 +58,7 @@ function collectExecutionWorkspaceConfigCommandPaths(raw: unknown, prefix: strin
   if (hasOwn(raw, "cleanupCommand")) {
     paths.push(prefixPath(prefix, "cleanupCommand"));
   }
+  paths.push(...collectWorkspaceRuntimeCommandPaths(raw, prefix));
   return paths;
 }
 
@@ -57,20 +79,32 @@ export function collectAgentAdapterWorkspaceCommandPaths(adapterConfig: unknown)
 
 export function collectProjectExecutionWorkspaceCommandPaths(policy: unknown): string[] {
   if (!isRecord(policy)) return [];
-  return collectWorkspaceStrategyCommandPaths(
-    policy.workspaceStrategy,
-    "executionWorkspacePolicy.workspaceStrategy",
+  const paths: string[] = [];
+  paths.push(
+    ...collectWorkspaceStrategyCommandPaths(
+      policy.workspaceStrategy,
+      "executionWorkspacePolicy.workspaceStrategy",
+    ),
   );
+  paths.push(...collectWorkspaceRuntimeCommandPaths(policy, "executionWorkspacePolicy"));
+  return paths;
 }
 
-export function collectProjectWorkspaceCommandPaths(
-  workspacePatch: unknown,
-  prefix = "",
-): string[] {
+export function collectProjectWorkspaceCommandPaths(workspacePatch: unknown, prefix = ""): string[] {
   if (!isRecord(workspacePatch)) return [];
-  return hasOwn(workspacePatch, "cleanupCommand")
-    ? [prefixPath(prefix, "cleanupCommand")]
-    : [];
+  const paths: string[] = [];
+  if (hasOwn(workspacePatch, "cleanupCommand")) {
+    paths.push(prefixPath(prefix, "cleanupCommand"));
+  }
+  if (hasOwn(workspacePatch, "runtimeConfig")) {
+    paths.push(
+      ...collectWorkspaceRuntimeCommandPaths(
+        workspacePatch.runtimeConfig,
+        prefixPath(prefix, "runtimeConfig"),
+      ),
+    );
+  }
+  return paths;
 }
 
 export function collectIssueWorkspaceCommandPaths(input: {
@@ -83,6 +117,12 @@ export function collectIssueWorkspaceCommandPaths(input: {
       ...collectWorkspaceStrategyCommandPaths(
         input.executionWorkspaceSettings.workspaceStrategy,
         "executionWorkspaceSettings.workspaceStrategy",
+      ),
+    );
+    paths.push(
+      ...collectWorkspaceRuntimeCommandPaths(
+        input.executionWorkspaceSettings,
+        "executionWorkspaceSettings",
       ),
     );
   }
