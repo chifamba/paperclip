@@ -489,13 +489,14 @@ describe("import selection catalog", () => {
     };
 
     const catalog = buildImportSelectionCatalog(preview);
-    const state = buildDefaultImportSelectionState(catalog);
+    const state = buildDefaultImportSelectionState(catalog, preview);
 
     expect(state.company).toBe(true);
     expect(state.projects.has("alpha")).toBe(true);
     expect(state.issues.has("kickoff")).toBe(true);
     expect(state.agents.has("ceo")).toBe(true);
     expect(state.skills.has("skill-a")).toBe(true);
+    expect(state.adapterOverrides["ceo"]).toEqual({ adapterType: "claude_local" });
 
     state.company = false;
     state.issues.clear();

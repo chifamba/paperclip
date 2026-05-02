@@ -3,14 +3,15 @@ import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
-import type {
-  Company,
-  FeedbackTrace,
-  CompanyPortabilityFileEntry,
-  CompanyPortabilityExportResult,
-  CompanyPortabilityInclude,
-  CompanyPortabilityPreviewResult,
-  CompanyPortabilityImportResult,
+import {
+  type Company,
+  type FeedbackTrace,
+  type CompanyPortabilityFileEntry,
+  type CompanyPortabilityExportResult,
+  type CompanyPortabilityInclude,
+  type CompanyPortabilityPreviewResult,
+  type CompanyPortabilityImportResult,
+  AGENT_ADAPTER_TYPES,
 } from "@paperclipai/shared";
 import { getTelemetryClient, trackCompanyImported } from "../../telemetry.js";
 import { ApiRequestError } from "../../client/http.js";
@@ -128,6 +129,7 @@ type ImportSelectionState = {
   issues: Set<string>;
   agents: Set<string>;
   skills: Set<string>;
+  adapterOverrides: Record<string, { adapterType: string }>;
 };
 
 function readPortableFileEntry(filePath: string, contents: Buffer): CompanyPortabilityFileEntry {
@@ -305,14 +307,23 @@ function toKeySet(items: Array<{ key: string }>): Set<string> {
   return new Set(items.map((item) => item.key));
 }
 
-export function buildDefaultImportSelectionState(catalog: ImportSelectionCatalog): ImportSelectionState {
+export function buildDefaultImportSelectionState(
+  catalog: ImportSelectionCatalog,
+  preview: Pick<CompanyPortabilityPreviewResult, "manifest" | "selectedAgentSlugs">,
+): ImportSelectionState {
   return {
     company: catalog.company.includedByDefault,
     projects: toKeySet(catalog.projects),
     issues: toKeySet(catalog.issues),
     agents: toKeySet(catalog.agents),
     skills: toKeySet(catalog.skills),
+    adapterOverrides: buildDefaultImportAdapterOverrides(preview) ?? {},
   };
+}
+
+function summarizeAdapterOverrides(state: ImportSelectionState): string {
+  const count = Object.keys(state.adapterOverrides).length;
+  return `${count} ${pluralize(count, "agent")} configured`;
 }
 
 function countSelected(state: ImportSelectionState, group: ImportSelectableGroup): number {
@@ -380,7 +391,6 @@ export function buildDefaultImportAdapterOverrides(
       .map((agent) => [
         agent.slug,
         {
-          // TODO: replace this temporary claude_local fallback with adapter selection in the import TUI.
           adapterType: "claude_local",
         },
       ]),
@@ -400,45 +410,59 @@ function buildDefaultImportAdapterMessages(
   ];
 }
 
-async function promptForImportSelection(preview: CompanyPortabilityPreviewResult): Promise<string[]> {
+async function promptForImportSelection(preview: CompanyPortabilityPreviewResult): Promise<{
+  selectedFiles: string[];
+  adapterOverrides: Record<string, { adapterType: string }>;
+}> {
   const catalog = buildImportSelectionCatalog(preview);
-  const state = buildDefaultImportSelectionState(catalog);
+  const state = buildDefaultImportSelectionState(catalog, preview);
 
   while (true) {
-    const choice = await p.select<ImportSelectableGroup | "company" | "confirm">({
+    const mainOptions: Array<{ value: string; label: string; hint?: string }> = [
+      {
+        value: "company",
+        label: state.company ? "Company: included" : "Company: skipped",
+        hint: catalog.company.files.length > 0 ? "toggle company metadata" : "no company metadata in package",
+      },
+      {
+        value: "projects",
+        label: "Select Projects",
+        hint: summarizeGroupSelection(catalog, state, "projects"),
+      },
+      {
+        value: "issues",
+        label: "Select Tasks",
+        hint: summarizeGroupSelection(catalog, state, "issues"),
+      },
+      {
+        value: "agents",
+        label: "Select Agents",
+        hint: summarizeGroupSelection(catalog, state, "agents"),
+      },
+      {
+        value: "skills",
+        label: "Select Skills",
+        hint: summarizeGroupSelection(catalog, state, "skills"),
+      },
+    ];
+
+    if (Object.keys(state.adapterOverrides).length > 0) {
+      mainOptions.push({
+        value: "adapters",
+        label: "Configure Adapters",
+        hint: summarizeAdapterOverrides(state),
+      });
+    }
+
+    mainOptions.push({
+      value: "confirm",
+      label: "Confirm",
+      hint: `${buildSelectedFilesFromImportSelection(catalog, state).length} files selected`,
+    });
+
+    const choice = await p.select<ImportSelectableGroup | "company" | "adapters" | "confirm">({
       message: "Select what Paperclip should import",
-      options: [
-        {
-          value: "company",
-          label: state.company ? "Company: included" : "Company: skipped",
-          hint: catalog.company.files.length > 0 ? "toggle company metadata" : "no company metadata in package",
-        },
-        {
-          value: "projects",
-          label: "Select Projects",
-          hint: summarizeGroupSelection(catalog, state, "projects"),
-        },
-        {
-          value: "issues",
-          label: "Select Tasks",
-          hint: summarizeGroupSelection(catalog, state, "issues"),
-        },
-        {
-          value: "agents",
-          label: "Select Agents",
-          hint: summarizeGroupSelection(catalog, state, "agents"),
-        },
-        {
-          value: "skills",
-          label: "Select Skills",
-          hint: summarizeGroupSelection(catalog, state, "skills"),
-        },
-        {
-          value: "confirm",
-          label: "Confirm",
-          hint: `${buildSelectedFilesFromImportSelection(catalog, state).length} files selected`,
-        },
-      ],
+      options: mainOptions as any,
       initialValue: "confirm",
     });
 
@@ -453,7 +477,47 @@ async function promptForImportSelection(preview: CompanyPortabilityPreviewResult
         p.note("Select at least one import target before confirming.", "Nothing selected");
         continue;
       }
-      return selectedFiles;
+      return {
+        selectedFiles,
+        adapterOverrides: state.adapterOverrides,
+      };
+    }
+
+    if (choice === "adapters") {
+      const agentSlugs = Object.keys(state.adapterOverrides).sort();
+      const agentChoice = await p.select<string>({
+        message: "Select an agent to configure its adapter",
+        options: [
+          ...agentSlugs.map((slug) => ({
+            value: slug,
+            label: slug,
+            hint: `current: ${state.adapterOverrides[slug]!.adapterType}`,
+          })),
+          { value: "back", label: "Back to main menu" },
+        ],
+      });
+
+      if (p.isCancel(agentChoice) || agentChoice === "back") {
+        continue;
+      }
+
+      const availableAdapters = AGENT_ADAPTER_TYPES.filter((t) => t !== "process" && t !== "http");
+      const adapterChoice = await p.select<string>({
+        message: `Select adapter for ${agentChoice}`,
+        options: [
+          ...availableAdapters.map((type) => ({
+            value: type,
+            label: type.replace(/_/g, "-"),
+          })),
+          { value: "back", label: "Back" },
+        ],
+        initialValue: state.adapterOverrides[agentChoice]!.adapterType,
+      });
+
+      if (!p.isCancel(adapterChoice) && adapterChoice !== "back") {
+        state.adapterOverrides[agentChoice]!.adapterType = adapterChoice;
+      }
+      continue;
     }
 
     if (choice === "company") {
@@ -1358,6 +1422,7 @@ export function registerCompanyCommands(program: Command): void {
           });
 
           let selectedFiles: string[] | undefined;
+          let adapterOverrides: Record<string, { adapterType: string }> | undefined;
           if (interactiveView && !opts.yes && !opts.include?.trim()) {
             const initialPreview = await ctx.api.post<CompanyPortabilityPreviewResult>(previewApiPath, {
               source: sourcePayload,
@@ -1369,7 +1434,9 @@ export function registerCompanyCommands(program: Command): void {
             if (!initialPreview) {
               throw new Error("Import preview returned no data.");
             }
-            selectedFiles = await promptForImportSelection(initialPreview);
+            const selection = await promptForImportSelection(initialPreview);
+            selectedFiles = selection.selectedFiles;
+            adapterOverrides = selection.adapterOverrides;
           }
 
           const previewPayload = {
@@ -1379,12 +1446,15 @@ export function registerCompanyCommands(program: Command): void {
             agents,
             collisionStrategy: collision,
             selectedFiles,
+            adapterOverrides,
           };
           const preview = await ctx.api.post<CompanyPortabilityPreviewResult>(previewApiPath, previewPayload);
           if (!preview) {
             throw new Error("Import preview returned no data.");
           }
-          const adapterOverrides = buildDefaultImportAdapterOverrides(preview);
+          if (!adapterOverrides) {
+            adapterOverrides = buildDefaultImportAdapterOverrides(preview);
+          }
           const adapterMessages = buildDefaultImportAdapterMessages(adapterOverrides);
 
           if (opts.dryRun) {
