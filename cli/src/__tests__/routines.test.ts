@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { Command } from "commander";
 import { eq } from "drizzle-orm";
 import {
   agents,
@@ -15,10 +16,15 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
-import { disableAllRoutinesInConfig } from "../commands/routines.js";
+import {
+  disableAllRoutinesInConfig,
+  registerRoutineCommands,
+} from "../commands/routines.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
-const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
+const describeEmbeddedPostgres = embeddedPostgresSupport.supported
+  ? describe
+  : describe.skip;
 
 if (!embeddedPostgresSupport.supported) {
   console.warn(
@@ -26,7 +32,11 @@ if (!embeddedPostgresSupport.supported) {
   );
 }
 
-function writeTestConfig(configPath: string, tempRoot: string, connectionString: string) {
+function writeTestConfig(
+  configPath: string,
+  tempRoot: string,
+  connectionString: string,
+) {
   const config = {
     $meta: {
       version: 1,
@@ -86,16 +96,55 @@ function writeTestConfig(configPath: string, tempRoot: string, connectionString:
   writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
 }
 
+describe("registerRoutineCommands", () => {
+  it("registers the routines command and subcommands", () => {
+    const program = new Command();
+
+    expect(() => registerRoutineCommands(program)).not.toThrow();
+
+    const routines = program.commands.find(
+      (command) => command.name() === "routines",
+    );
+    expect(routines).toBeDefined();
+
+    const subcommands = routines?.commands.map((command) => command.name());
+    expect(subcommands).toEqual(["disable-all"]);
+
+    const disableAllCommand = routines?.commands.find(
+      (c) => c.name() === "disable-all",
+    );
+    expect(disableAllCommand).toBeDefined();
+    expect(
+      disableAllCommand?.options.some((opt) => opt.long === "--config"),
+    ).toBe(true);
+    expect(
+      disableAllCommand?.options.some((opt) => opt.long === "--data-dir"),
+    ).toBe(true);
+    expect(
+      disableAllCommand?.options.some((opt) => opt.long === "--company-id"),
+    ).toBe(true);
+    expect(
+      disableAllCommand?.options.some((opt) => opt.long === "--json"),
+    ).toBe(true);
+  });
+});
+
 describeEmbeddedPostgres("disableAllRoutinesInConfig", () => {
   let db!: ReturnType<typeof createDb>;
-  let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
+  let tempDb: Awaited<
+    ReturnType<typeof startEmbeddedPostgresTestDatabase>
+  > | null = null;
   let tempRoot = "";
   let configPath = "";
 
   beforeAll(async () => {
-    tempDb = await startEmbeddedPostgresTestDatabase("paperclip-routines-cli-db-");
+    tempDb = await startEmbeddedPostgresTestDatabase(
+      "paperclip-routines-cli-db-",
+    );
     db = createDb(tempDb.connectionString);
-    tempRoot = mkdtempSync(path.join(os.tmpdir(), "paperclip-routines-cli-config-"));
+    tempRoot = mkdtempSync(
+      path.join(os.tmpdir(), "paperclip-routines-cli-config-"),
+    );
     configPath = path.join(tempRoot, "config.json");
     writeTestConfig(configPath, tempRoot, tempDb.connectionString);
   }, 20_000);
@@ -232,7 +281,9 @@ describeEmbeddedPostgres("disableAllRoutinesInConfig", () => {
       })
       .from(routines)
       .where(eq(routines.companyId, companyId));
-    const statusById = new Map(companyRoutines.map((routine) => [routine.id, routine.status]));
+    const statusById = new Map(
+      companyRoutines.map((routine) => [routine.id, routine.status]),
+    );
 
     expect(statusById.get(activeRoutineId)).toBe("paused");
     expect(statusById.get(pausedRoutineId)).toBe("paused");
