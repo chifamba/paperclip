@@ -270,9 +270,6 @@ const externalAdaptersReady: Promise<void> = (async () => {
     for (const externalAdapter of externalAdapters) {
       const overriding = BUILTIN_ADAPTER_TYPES.has(externalAdapter.type);
       if (overriding) {
-        console.log(
-          `[paperclip] External adapter "${externalAdapter.type}" overrides built-in adapter`,
-        );
         // Save the original builtin for later restoration.
         const existing = adaptersByType.get(externalAdapter.type);
         if (existing && !builtinFallbacks.has(externalAdapter.type)) {
