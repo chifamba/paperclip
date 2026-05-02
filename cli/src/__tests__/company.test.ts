@@ -1,3 +1,4 @@
+import { Command } from "commander";
 import { describe, expect, it } from "vitest";
 import type { CompanyPortabilityPreviewResult } from "@paperclipai/shared";
 import {
@@ -10,6 +11,7 @@ import {
   renderCompanyImportResult,
   resolveCompanyImportApplyConfirmationMode,
   resolveCompanyImportApiPath,
+  registerCompanyCommands,
 } from "../commands/client/company.js";
 
 describe("resolveCompanyImportApiPath", () => {
@@ -595,5 +597,28 @@ describe("default adapter overrides", () => {
         adapterType: "claude_local",
       },
     });
+  });
+});
+
+describe("registerCompanyCommands", () => {
+  it("registers company commands", () => {
+    const program = new Command();
+    expect(() => registerCompanyCommands(program)).not.toThrow();
+
+    const company = program.commands.find((command) => command.name() === "company");
+    expect(company).toBeDefined();
+
+    const subCommands = company?.commands.map((c) => c.name());
+    expect(subCommands).toEqual(
+      expect.arrayContaining([
+        "list",
+        "get",
+        "feedback:list",
+        "feedback:export",
+        "export",
+        "import",
+        "delete"
+      ])
+    );
   });
 });
