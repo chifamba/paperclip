@@ -100,10 +100,10 @@ function resolveAdapterPackageDir(record: AdapterPluginRecord): string {
  * Read `version` from the adapter's package.json on disk.
  * This is the source of truth for what is actually installed (npm or local path).
  */
-function readAdapterPackageVersionFromDisk(record: AdapterPluginRecord): string | undefined {
+async function readAdapterPackageVersionFromDisk(record: AdapterPluginRecord): Promise<string | undefined> {
   try {
     const pkgDir = resolveAdapterPackageDir(record);
-    const raw = fs.readFileSync(path.join(pkgDir, "package.json"), "utf-8");
+    const raw = await readFile(path.join(pkgDir, "package.json"), "utf-8");
     const v = JSON.parse(raw).version;
     return typeof v === "string" && v.trim().length > 0 ? v.trim() : undefined;
   } catch {
@@ -120,8 +120,8 @@ function buildAdapterCapabilities(adapter: ServerAdapterModule): AdapterCapabili
   };
 }
 
-function buildAdapterInfo(adapter: ServerAdapterModule, externalRecord: AdapterPluginRecord | undefined, disabledSet: Set<string>): AdapterInfo {
-  const fromDisk = externalRecord ? readAdapterPackageVersionFromDisk(externalRecord) : undefined;
+async function buildAdapterInfo(adapter: ServerAdapterModule, externalRecord: AdapterPluginRecord | undefined, disabledSet: Set<string>): Promise<AdapterInfo> {
+  const fromDisk = externalRecord ? await readAdapterPackageVersionFromDisk(externalRecord) : undefined;
   return {
     type: adapter.type,
     label: adapter.type, // ServerAdapterModule doesn't have a separate "label" field; type serves as label
@@ -200,9 +200,11 @@ export function adapterRoutes() {
     );
     const disabledSet = new Set(getDisabledAdapterTypes());
 
-    const result: AdapterInfo[] = registeredAdapters.map((adapter) =>
-      buildAdapterInfo(adapter, externalRecords.get(adapter.type), disabledSet),
-    ).sort((a, b) => a.type.localeCompare(b.type));
+    const result: AdapterInfo[] = (await Promise.all(
+      registeredAdapters.map((adapter) =>
+        buildAdapterInfo(adapter, externalRecords.get(adapter.type), disabledSet),
+      )
+    )).sort((a, b) => a.type.localeCompare(b.type));
 
     res.json(result);
   });
@@ -517,7 +519,7 @@ export function adapterRoutes() {
       const record = getAdapterPluginByType(type);
       let newVersion: string | undefined;
       if (record) {
-        newVersion = readAdapterPackageVersionFromDisk(record);
+        newVersion = await readAdapterPackageVersionFromDisk(record);
         if (newVersion) {
           addAdapterPlugin({ ...record, version: newVersion });
         }
@@ -585,7 +587,7 @@ export function adapterRoutes() {
       let newVersion: string | undefined;
       const updatedRecord = getAdapterPluginByType(type);
       if (updatedRecord) {
-        newVersion = readAdapterPackageVersionFromDisk(updatedRecord);
+        newVersion = await readAdapterPackageVersionFromDisk(updatedRecord);
         if (newVersion) {
           addAdapterPlugin({ ...updatedRecord, version: newVersion });
         }
