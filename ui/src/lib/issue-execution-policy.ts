@@ -1,13 +1,11 @@
 import type { IssueExecutionPolicy, IssueExecutionStageParticipant, IssueExecutionStagePrincipal } from "@paperclipai/shared";
 import { parseAssigneeValue } from "./assignees";
+import { secureRandomId } from "./utils";
 
 type StageType = "review" | "approval";
 
 function newId() {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-    return crypto.randomUUID();
-  }
-  return `stage-${Math.random().toString(36).slice(2)}`;
+  return secureRandomId("stage");
 }
 
 function principalKey(principal: IssueExecutionStagePrincipal | IssueExecutionStageParticipant) {

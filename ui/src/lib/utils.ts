@@ -185,3 +185,24 @@ export function projectWorkspaceUrl(
 ): string {
   return `${projectUrl(project)}/workspaces/${workspaceId}`;
 }
+
+/**
+ * Generate a cryptographically secure random ID.
+ * Falls back to crypto.getRandomValues if randomUUID is not available.
+ */
+export function secureRandomId(prefix?: string): string {
+  const id = (() => {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+    if (typeof crypto !== "undefined" && typeof crypto.getRandomValues === "function") {
+      const array = new Uint8Array(16);
+      crypto.getRandomValues(array);
+      return Array.from(array, (byte) => byte.toString(16).padStart(2, "0")).join("");
+    }
+    // Last resort fallback for legacy/non-secure environments
+    return Math.random().toString(36).slice(2);
+  })();
+
+  return prefix ? `${prefix}-${id}` : id;
+}
