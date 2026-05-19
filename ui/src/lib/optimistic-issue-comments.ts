@@ -1,4 +1,5 @@
 import type { Issue, IssueComment } from "@paperclipai/shared";
+import { secureRandomId } from "./utils";
 
 export interface IssueCommentReassignment {
   assigneeAgentId: string | null;
@@ -18,11 +19,7 @@ function toTimestamp(value: Date | string) {
 }
 
 function createOptimisticCommentId() {
-  const randomUuid = globalThis.crypto?.randomUUID?.();
-  if (randomUuid) {
-    return `optimistic-${randomUuid}`;
-  }
-  return `optimistic-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  return secureRandomId("optimistic");
 }
 
 export function sortIssueComments<T extends { createdAt: Date | string; id: string }>(comments: T[]) {
