@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { Command } from "commander";
 import { eq } from "drizzle-orm";
 import {
@@ -18,6 +18,7 @@ import {
 } from "./helpers/embedded-postgres.js";
 import {
   disableAllRoutinesInConfig,
+  disableAllRoutinesCommand,
   registerRoutineCommands,
 } from "../commands/routines.js";
 
@@ -296,5 +297,102 @@ describeEmbeddedPostgres("disableAllRoutinesInConfig", () => {
       .from(routines)
       .where(eq(routines.id, otherCompanyRoutineId));
     expect(otherCompanyRoutine[0]?.status).toBe("active");
+  });
+
+  describe("disableAllRoutinesCommand", () => {
+    let consoleLogSpy: ReturnType<typeof vi.spyOn>;
+
+    beforeEach(() => {
+      consoleLogSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      consoleLogSpy.mockRestore();
+    });
+
+    it("outputs JSON when --json is passed", async () => {
+      const companyId = randomUUID();
+      await db.insert(companies).values([{
+        id: companyId,
+        name: "Paperclip",
+        issuePrefix: "T123",
+        requireBoardApprovalForNewAgents: false,
+      }]);
+
+      await disableAllRoutinesCommand({
+        config: configPath,
+        companyId,
+        json: true,
+      });
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining('"totalRoutines": 0')
+      );
+    });
+
+    it("outputs 'No routines found' when totalRoutines is 0", async () => {
+      const companyId = randomUUID();
+      await db.insert(companies).values([{
+        id: companyId,
+        name: "Paperclip",
+        issuePrefix: "T123",
+        requireBoardApprovalForNewAgents: false,
+      }]);
+
+      await disableAllRoutinesCommand({
+        config: configPath,
+        companyId,
+      });
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining(`No routines found for company ${companyId}.`)
+      );
+    });
+
+    it("outputs pause summary when routines exist", async () => {
+      const companyId = randomUUID();
+      const projectId = randomUUID();
+      const agentId = randomUUID();
+      const activeRoutineId = randomUUID();
+
+      await db.insert(companies).values([{
+        id: companyId,
+        name: "Paperclip",
+        issuePrefix: "T123",
+        requireBoardApprovalForNewAgents: false,
+      }]);
+      await db.insert(agents).values([{
+        id: agentId,
+        companyId,
+        name: "Coder",
+        adapterType: "process",
+        adapterConfig: {},
+        runtimeConfig: {},
+        permissions: {},
+      }]);
+      await db.insert(projects).values([{
+        id: projectId,
+        companyId,
+        name: "Project",
+        status: "in_progress",
+      }]);
+      await db.insert(routines).values([{
+        id: activeRoutineId,
+        companyId,
+        projectId,
+        assigneeAgentId: agentId,
+        title: "Active routine",
+        status: "active",
+      }]);
+
+      await disableAllRoutinesCommand({
+        config: configPath,
+        companyId,
+      });
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining(`Paused 1 routine(s) for company ${companyId} (0 already paused, 0 archived).`)
+      );
+    });
   });
 });
