@@ -1,9 +1,14 @@
 # 2026-04-06 Smart Model Routing
 
+> [!NOTE]
+> **Status: Consolidated into Master Plan.**
+> The pending tasks and actionable checklist items in this design document have been consolidated into the centralized [2026-05-23-master-pending-work-plan.md](file:///Users/robert/projects/github.com/paperclip/doc/plans/2026-05-23-master-pending-work-plan.md). Please refer to the master plan for active execution status and tracking.
+
 Status: Proposed
 Date: 2026-04-06
 Audience: Product and engineering
 Related:
+
 - `doc/SPEC-implementation.md`
 - `doc/PRODUCT.md`
 - `doc/plans/2026-03-14-adapter-skill-sync-rollout.md`

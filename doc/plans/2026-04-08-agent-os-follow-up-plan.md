@@ -1,8 +1,13 @@
 # PAP-1229 Agent OS Follow-up Plan
 
+> [!NOTE]
+> **Status: Consolidated into Master Plan.**
+> The pending tasks and actionable checklist items in this design document have been consolidated into the centralized [2026-05-23-master-pending-work-plan.md](file:///Users/robert/projects/github.com/paperclip/doc/plans/2026-05-23-master-pending-work-plan.md). Please refer to the master plan for active execution status and tracking.
+
 Date: 2026-04-08
 Related issue: `PAP-1229`
 Companion analysis: `doc/plans/2026-04-08-agent-os-technical-report.md`
+
 
 ## Goal
 
