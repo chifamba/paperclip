@@ -18,6 +18,7 @@ import { listCurrentRuntimeServicesForProjectWorkspaces } from "./workspace-runt
 import { parseProjectExecutionWorkspacePolicy } from "./execution-workspace-policy.js";
 import { mergeProjectWorkspaceRuntimeConfig, readProjectWorkspaceRuntimeConfig } from "./project-workspace-runtime-config.js";
 import { resolveManagedProjectWorkspaceDir } from "../home-paths.js";
+import { discoverVSCodeTasks } from "./vscode-tasks.js";
 
 type ProjectRow = typeof projects.$inferSelect;
 type ProjectWorkspaceRow = typeof projectWorkspaces.$inferSelect;
@@ -245,15 +246,23 @@ async function attachWorkspaces(db: Db, rows: ProjectWithGoals[]): Promise<Proje
     arr.push(row);
   }
 
-  return rows.map((row) => {
+  const enrichedRows = await Promise.all(rows.map(async (row) => {
     const projectWorkspaceRows = map.get(row.id) ?? [];
-    const workspaces = projectWorkspaceRows.map((workspace) =>
-      toWorkspace(
+    const workspaces = await Promise.all(projectWorkspaceRows.map(async (workspace) => {
+      const baseWS = toWorkspace(
         workspace,
         sharedRuntimeServicesByWorkspaceId.get(workspace.id) ?? [],
-      ),
-    );
+      );
+      const discoveredVSCodeTasks = workspace.cwd ? await discoverVSCodeTasks(workspace.cwd) : [];
+      return {
+        ...baseWS,
+        discoveredVSCodeTasks,
+      };
+    }));
     const primaryWorkspace = pickPrimaryWorkspace(projectWorkspaceRows, sharedRuntimeServicesByWorkspaceId);
+    if (primaryWorkspace && primaryWorkspace.cwd) {
+      primaryWorkspace.discoveredVSCodeTasks = await discoverVSCodeTasks(primaryWorkspace.cwd);
+    }
     return {
       ...row,
       codebase: deriveProjectCodebase({
@@ -265,7 +274,9 @@ async function attachWorkspaces(db: Db, rows: ProjectWithGoals[]): Promise<Proje
       workspaces,
       primaryWorkspace,
     };
-  });
+  }));
+
+  return enrichedRows;
 }
 
 /** Sync the project_goals join table for a single project. */

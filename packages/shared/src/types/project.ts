@@ -3,6 +3,7 @@ import type {
   ProjectExecutionWorkspacePolicy,
   ProjectWorkspaceRuntimeConfig,
   WorkspaceRuntimeService,
+  WorkspaceCommandDefinition,
 } from "./workspace-runtime.js";
 import type { AgentEnvConfig } from "./secrets.js";
 
@@ -34,6 +35,7 @@ export interface ProjectWorkspace {
   runtimeConfig: ProjectWorkspaceRuntimeConfig | null;
   isPrimary: boolean;
   runtimeServices?: WorkspaceRuntimeService[];
+  discoveredVSCodeTasks?: WorkspaceCommandDefinition[];
   createdAt: Date;
   updatedAt: Date;
 }

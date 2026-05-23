@@ -9,7 +9,7 @@ import {
   workspaceRuntimeControlTargetSchema,
 } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
-import { executionWorkspaceService, logActivity, workspaceOperationService } from "../services/index.js";
+import { executionWorkspaceService, logActivity, workspaceOperationService, discoverVSCodeTasks } from "../services/index.js";
 import { mergeExecutionWorkspaceConfig, readExecutionWorkspaceConfig } from "../services/execution-workspaces.js";
 import { parseProjectExecutionWorkspacePolicy } from "../services/execution-workspace-policy.js";
 import { readProjectWorkspaceRuntimeConfig } from "../services/project-workspace-runtime-config.js";
@@ -152,14 +152,19 @@ export function executionWorkspaceRoutes(db: Db) {
           )
           .then((rows) => parseProjectExecutionWorkspacePolicy(rows[0]?.executionWorkspacePolicy))
       : null;
-    const effectiveRuntimeConfig = existing.config?.workspaceRuntime ?? projectWorkspaceRuntime ?? null;
+     const effectiveRuntimeConfig = existing.config?.workspaceRuntime ?? projectWorkspaceRuntime ?? null;
     const target = req.body as { workspaceCommandId?: string | null; runtimeServiceId?: string | null; serviceIndex?: number | null };
     const configuredServices = effectiveRuntimeConfig
       ? listConfiguredRuntimeServiceEntries({ workspaceRuntime: effectiveRuntimeConfig })
       : [];
-    const workspaceCommand = effectiveRuntimeConfig
+    const discoveredTasks = existing.cwd ? await discoverVSCodeTasks(existing.cwd) : [];
+    let workspaceCommand = effectiveRuntimeConfig
       ? findWorkspaceCommandDefinition(effectiveRuntimeConfig, target.workspaceCommandId ?? null)
       : null;
+    if (!workspaceCommand && target.workspaceCommandId) {
+      workspaceCommand = discoveredTasks.find((task) => task.id === target.workspaceCommandId) ?? null;
+    }
+
     if (target.workspaceCommandId && !workspaceCommand) {
       res.status(404).json({ error: "Workspace command not found for this execution workspace" });
       return;
@@ -178,9 +183,10 @@ export function executionWorkspaceRoutes(db: Db) {
         ? workspaceCommand.serviceIndex
         : target.serviceIndex ?? null;
     if (
-      selectedServiceIndex !== undefined
-      && selectedServiceIndex !== null
-      && (selectedServiceIndex < 0 || selectedServiceIndex >= configuredServices.length)
+      workspaceCommand?.source.type !== "vscode_task" &&
+      selectedServiceIndex !== undefined &&
+      selectedServiceIndex !== null &&
+      (selectedServiceIndex < 0 || selectedServiceIndex >= configuredServices.length)
     ) {
       res.status(422).json({ error: "Selected runtime service is not defined in this execution workspace runtime config" });
       return;
@@ -198,7 +204,7 @@ export function executionWorkspaceRoutes(db: Db) {
       return;
     }
 
-    if ((action === "start" || action === "restart") && !effectiveRuntimeConfig) {
+    if ((action === "start" || action === "restart") && !effectiveRuntimeConfig && workspaceCommand?.source.type !== "vscode_task") {
       res.status(422).json({ error: "Execution workspace has no workspace command configuration or inherited project workspace default" });
       return;
     }
@@ -328,6 +334,15 @@ export function executionWorkspaceRoutes(db: Db) {
           if (!availableWorkspace) {
             throw new Error("Execution workspace needs a local path before Paperclip can manage local runtime services");
           }
+          const effectiveConfig = workspaceCommand?.source.type === "vscode_task"
+            ? {
+                workspaceRuntime: {
+                  services: [workspaceCommand.rawConfig],
+                },
+              }
+            : { workspaceRuntime: effectiveRuntimeConfig };
+          const effectiveServiceIndex = workspaceCommand?.source.type === "vscode_task" ? 0 : selectedServiceIndex;
+
           const startedServices = await startRuntimeServicesForWorkspaceControl({
             db,
             actor: {
@@ -344,10 +359,10 @@ export function executionWorkspaceRoutes(db: Db) {
               : null,
             workspace: availableWorkspace,
             executionWorkspaceId: existing.id,
-            config: { workspaceRuntime: effectiveRuntimeConfig },
+            config: effectiveConfig,
             adapterEnv: {},
             onLog,
-            serviceIndex: selectedServiceIndex,
+            serviceIndex: effectiveServiceIndex,
           });
           runtimeServiceCount = startedServices.length;
         } else {

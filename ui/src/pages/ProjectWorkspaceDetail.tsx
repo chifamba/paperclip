@@ -354,12 +354,16 @@ export function ProjectWorkspaceDetail() {
   }
 
   const canRunWorkspaceCommands = Boolean(workspace.cwd);
-  const canStartRuntimeServices = Boolean(workspace.runtimeConfig?.workspaceRuntime) && canRunWorkspaceCommands;
+  const canStartRuntimeServices =
+    (Boolean(workspace.runtimeConfig?.workspaceRuntime) ||
+      Boolean(workspace.discoveredVSCodeTasks && workspace.discoveredVSCodeTasks.length > 0)) &&
+    canRunWorkspaceCommands;
   const runtimeControlSections = buildWorkspaceRuntimeControlSections({
     runtimeConfig: workspace.runtimeConfig?.workspaceRuntime ?? null,
     runtimeServices: workspace.runtimeServices ?? [],
     canStartServices: canStartRuntimeServices,
     canRunJobs: canRunWorkspaceCommands,
+    discoveredVSCodeTasks: workspace.discoveredVSCodeTasks,
   });
   const pendingRuntimeAction = controlRuntimeServices.isPending ? controlRuntimeServices.variables ?? null : null;
 

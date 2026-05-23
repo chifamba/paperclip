@@ -12,7 +12,7 @@ import {
 } from "@paperclipai/shared";
 import { trackProjectCreated } from "@paperclipai/shared/telemetry";
 import { validate } from "../middleware/validate.js";
-import { projectService, logActivity, secretService, workspaceOperationService } from "../services/index.js";
+import { projectService, logActivity, secretService, workspaceOperationService, discoverVSCodeTasks } from "../services/index.js";
 import { conflict } from "../errors.js";
 import { assertCompanyAccess, getActorInfo } from "./authz.js";
 import {
@@ -329,9 +329,14 @@ export function projectRoutes(db: Db) {
     const runtimeConfig = workspace.runtimeConfig?.workspaceRuntime ?? null;
     const target = req.body as { workspaceCommandId?: string | null; runtimeServiceId?: string | null; serviceIndex?: number | null };
     const configuredServices = runtimeConfig ? listConfiguredRuntimeServiceEntries({ workspaceRuntime: runtimeConfig }) : [];
-    const workspaceCommand = runtimeConfig
+    const discoveredTasks = workspaceCwd ? await discoverVSCodeTasks(workspaceCwd) : [];
+    let workspaceCommand = runtimeConfig
       ? findWorkspaceCommandDefinition(runtimeConfig, target.workspaceCommandId ?? null)
       : null;
+    if (!workspaceCommand && target.workspaceCommandId) {
+      workspaceCommand = discoveredTasks.find((task) => task.id === target.workspaceCommandId) ?? null;
+    }
+
     if (target.workspaceCommandId && !workspaceCommand) {
       res.status(404).json({ error: "Workspace command not found for this project workspace" });
       return;
@@ -350,9 +355,10 @@ export function projectRoutes(db: Db) {
         ? workspaceCommand.serviceIndex
         : target.serviceIndex ?? null;
     if (
-      selectedServiceIndex !== undefined
-      && selectedServiceIndex !== null
-      && (selectedServiceIndex < 0 || selectedServiceIndex >= configuredServices.length)
+      workspaceCommand?.source.type !== "vscode_task" &&
+      selectedServiceIndex !== undefined &&
+      selectedServiceIndex !== null &&
+      (selectedServiceIndex < 0 || selectedServiceIndex >= configuredServices.length)
     ) {
       res.status(422).json({ error: "Selected runtime service is not defined in this project workspace runtime config" });
       return;
@@ -369,7 +375,7 @@ export function projectRoutes(db: Db) {
       res.status(422).json({ error: "Select a workspace job to run" });
       return;
     }
-    if ((action === "start" || action === "restart") && !runtimeConfig) {
+    if ((action === "start" || action === "restart") && !runtimeConfig && workspaceCommand?.source.type !== "vscode_task") {
       res.status(422).json({ error: "Project workspace has no workspace command configuration" });
       return;
     }
@@ -453,6 +459,15 @@ export function projectRoutes(db: Db) {
         }
 
         if (action === "start" || action === "restart") {
+          const effectiveConfig = workspaceCommand?.source.type === "vscode_task"
+            ? {
+                workspaceRuntime: {
+                  services: [workspaceCommand.rawConfig],
+                },
+              }
+            : { workspaceRuntime: runtimeConfig };
+          const effectiveServiceIndex = workspaceCommand?.source.type === "vscode_task" ? 0 : selectedServiceIndex;
+
           const startedServices = await startRuntimeServicesForWorkspaceControl({
             db,
             actor: {
@@ -475,10 +490,10 @@ export function projectRoutes(db: Db) {
               warnings: [],
               created: false,
             },
-            config: { workspaceRuntime: runtimeConfig },
+            config: effectiveConfig,
             adapterEnv: {},
             onLog,
-            serviceIndex: selectedServiceIndex,
+            serviceIndex: effectiveServiceIndex,
           });
           runtimeServiceCount = startedServices.length;
         } else {

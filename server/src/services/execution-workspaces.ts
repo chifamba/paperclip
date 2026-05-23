@@ -19,6 +19,7 @@ import {
   listCurrentRuntimeServicesForExecutionWorkspaces,
   listCurrentRuntimeServicesForProjectWorkspaces,
 } from "./workspace-runtime-read-model.js";
+import { discoverVSCodeTasks } from "./vscode-tasks.js";
 
 type ExecutionWorkspaceRow = typeof executionWorkspaces.$inferSelect;
 type WorkspaceRuntimeServiceRow = typeof workspaceRuntimeServices.$inferSelect;
@@ -453,7 +454,7 @@ export function executionWorkspaceService(db: Db) {
       return rows.map((row) => toExecutionWorkspaceSummary(row));
     },
 
-    getById: async (id: string) => {
+    getById: async (id: string): Promise<ExecutionWorkspace | null> => {
       const row = await db
         .select()
         .from(executionWorkspaces)
@@ -461,10 +462,15 @@ export function executionWorkspaceService(db: Db) {
         .then((rows) => rows[0] ?? null);
       if (!row) return null;
       const runtimeServicesByWorkspaceId = await loadEffectiveRuntimeServicesByExecutionWorkspace(db, row.companyId, [row]);
-      return toExecutionWorkspace(
+      const baseWorkspace = toExecutionWorkspace(
         row,
         (runtimeServicesByWorkspaceId.get(row.id) ?? []).map(toRuntimeService),
       );
+      const discoveredVSCodeTasks = row.cwd ? await discoverVSCodeTasks(row.cwd) : [];
+      return {
+        ...baseWorkspace,
+        discoveredVSCodeTasks,
+      };
     },
 
     getCloseReadiness: async (id: string): Promise<ExecutionWorkspaceCloseReadiness | null> => {

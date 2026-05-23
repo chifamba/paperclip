@@ -29,12 +29,15 @@ services:
       PAPERCLIP_PUBLIC_URL: "${PAPERCLIP_PUBLIC_URL:-http://robertsacstudio.lan:80}"
       BETTER_AUTH_URL: "${PAPERCLIP_PUBLIC_URL:-http://robertsacstudio.lan:80}"
       BETTER_AUTH_SECRET: "${BETTER_AUTH_SECRET:-d2a440f5c5d9413c0a7f9bb35093faa96bc1b8ce7a82faeabd252dacc30e0e351bab111cab37481d91ade13004da9fed5dba95f941cc62ff6087f15156d8c7ef}"
-      ANTHROPIC_BASE_URL: "http://robertsacstudio:11434"
-      ANTHROPIC_AUTH_TOKEN: "ollama"
-      ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus:4.6"
-      ANTHROPIC_DEFAULT_SONNET_MODEL: "claude-sonnet:4.6"
-      ANTHROPIC_DEFAULT_HAIKU_MODEL: "claude-haiku:4.5"
-      CLAUDE_CODE_SUBAGENT_MODEL: "claude-haiku:4.5"
+      ANTHROPIC_BASE_URL: "https://openrouter.ai/api/v1"
+      ANTHROPIC_AUTH_TOKEN: ${OPENROUTER_ANTHROPIC_AUTH_TOKEN:-Token Missing}
+      ANTHROPIC_DEFAULT_OPUS_MODEL: "anthropic/claude-4.5-sonnet"
+      ANTHROPIC_DEFAULT_SONNET_MODEL: "anthropic/claude-4.5-sonnet"
+      ANTHROPIC_DEFAULT_HAIKU_MODEL: "anthropic/claude-4.5-sonnet"
+      CLAUDE_CODE_SUBAGENT_MODEL: "anthropic/claude-4.5-sonnet"
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-API Key Missing}
+      HTTP_REFERER: "https://github.com/paperclipai/paperclip"
+      X_TITLE: "Paperclip"
     volumes:
       - /System/Volumes/Data/storage/paperclip:/paperclip
       - /Users/robert/.gemini/oauth_creds.json:/etc/gemini/oauth_creds.json:ro
@@ -50,6 +53,28 @@ services:
       - "80:80"
     depends_on:
       - backend
+
+  test:
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    environment:
+      DATABASE_URL: postgres://paperclip:paperclip@db:5432/paperclip
+      NODE_ENV: test
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/cli/node_modules
+      - /app/server/node_modules
+      - /app/ui/node_modules
+      - /app/packages/shared/node_modules
+      - /app/packages/db/node_modules
+      - /app/packages/adapter-utils/node_modules
+      - /app/packages/mcp-server/node_modules
+    command: pnpm test
+    depends_on:
+      db:
+        condition: service_healthy
 
 volumes:
   pgdata:

@@ -50,9 +50,11 @@ export type WorkspaceRuntimeServiceStateMap = Record<string, WorkspaceRuntimeDes
 export type WorkspaceCommandKind = "service" | "job";
 
 export interface WorkspaceCommandSource {
-  type: "paperclip";
-  key: "commands" | "services" | "jobs";
+  type: "paperclip" | "vscode_task";
+  key?: "commands" | "services" | "jobs";
   index: number;
+  taskLabel?: string;
+  taskPath?: string;
 }
 
 export interface WorkspaceCommandDefinition {
@@ -193,6 +195,7 @@ export interface ExecutionWorkspace {
   config: ExecutionWorkspaceConfig | null;
   metadata: Record<string, unknown> | null;
   runtimeServices?: WorkspaceRuntimeService[];
+  discoveredVSCodeTasks?: WorkspaceCommandDefinition[];
   createdAt: Date;
   updatedAt: Date;
 }

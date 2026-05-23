@@ -130,8 +130,12 @@ export function buildWorkspaceRuntimeControlSections(input: {
   runtimeServices: WorkspaceRuntimeService[] | null | undefined;
   canStartServices: boolean;
   canRunJobs?: boolean;
+  discoveredVSCodeTasks?: WorkspaceCommandDefinition[] | null | undefined;
 }): WorkspaceRuntimeControlSections {
-  const commands = listWorkspaceCommandDefinitions(input.runtimeConfig);
+  const commands = [
+    ...listWorkspaceCommandDefinitions(input.runtimeConfig),
+    ...(input.discoveredVSCodeTasks ?? []),
+  ];
   const runtimeServices = [...(input.runtimeServices ?? [])];
   const matchedRuntimeServiceIds = new Set<string>();
   const services: WorkspaceRuntimeControlItem[] = [];

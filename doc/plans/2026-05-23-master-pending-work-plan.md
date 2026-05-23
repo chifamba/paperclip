@@ -46,10 +46,10 @@ graph TD
 ### 🧹 1.1 Heartbeat Process-Group Supervision (`PAP-1231`)
 *   **Problem:** Heartbeat-run local adapters track only a single `process_pid`. If Codex or Claude launches Chrome, Chromium, or other helper processes, they are orphaned when the direct child process finishes or is cancelled, leading to massive memory/process leaks.
 *   **Actionable Tasks:**
-    - [ ] **Database Schema:** Add a nullable `process_group_id` integer column to `heartbeat_runs`.
-    - [ ] **Process Spawning:** Update `runChildProcess()` in `packages/adapter-utils/src/server-utils.ts` to spawn child processes with `detached: true` on POSIX platforms.
-    - [ ] **Termination Logic:** Replace `child.kill()` with process-group-aware termination (`process.kill(-processGroupId, signal)`) escalating from `SIGTERM` to `SIGKILL` after a grace period.
-    - [ ] **Orphan Recovery:** Update active run recovery to assert status on the whole process group rather than a single PID.
+    - [x] **Database Schema:** Add a nullable `process_group_id` integer column to `heartbeat_runs`.
+    - [x] **Process Spawning:** Update `runChildProcess()` in `packages/adapter-utils/src/server-utils.ts` to spawn child processes with `detached: true` on POSIX platforms.
+    - [x] **Termination Logic:** Replace `child.kill()` with process-group-aware termination (`process.kill(-processGroupId, signal)`) escalating from `SIGTERM` to `SIGKILL` after a grace period.
+    - [x] **Orphan Recovery:** Update active run recovery to assert status on the whole process group rather than a single PID.
 
 ### 📊 1.2 Unified Billing Ledger & Provider Reporting
 *   **Problem:** Spend reporting is scattered and tries to infer billing logic from `heartbeat_runs.usage_json` and `cost_events` concurrently, making multi-provider aggregator reporting inaccurate.
@@ -71,9 +71,9 @@ graph TD
 ### 🔌 2.1 VS Code Task Interoperability (`PAP-1377`)
 *   **Problem:** Developers currently must hand-author JSON runtime settings. We need a way to automatically import and run tasks defined in a repository's `.vscode/tasks.json`.
 *   **Actionable Tasks:**
-    - [ ] **Task Parser:** Build a schema-validated discovery parser to read shell/process tasks from `.vscode/tasks.json`.
-    - [ ] **Semantic Mapping:** Map discovered tasks to supervised **Workspace Services** (long-running) or **Workspace Jobs** (one-shot).
-    - [ ] **Task Controls:** Expose a discovered commands list in the UI to allow operators to run jobs or start services instantly.
+    - [x] **Task Parser:** Build a schema-validated discovery parser to read shell/process tasks from `.vscode/tasks.json`.
+    - [x] **Semantic Mapping:** Map discovered tasks to supervised **Workspace Services** (long-running) or **Workspace Jobs** (one-shot).
+    - [x] **Task Controls:** Expose a discovered commands list in the UI to allow operators to run jobs or start services instantly.
 
 ### 🧠 2.2 Smart Model Routing & Auxiliary Model Slots
 *   **Problem:** Heartbeats assume one model per run. We need to split work between cheap models (for initial triage/waking) and primary models (for coding) to save token cost.
