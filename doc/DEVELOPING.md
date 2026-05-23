@@ -233,6 +233,19 @@ eval "$(paperclipai worktree env)"
 
 ### Worktree CLI Reference
 
+**`pnpm paperclipai worktree:list [options]`** — List git worktrees visible from this repo and whether they look like Paperclip worktrees.
+
+| Option | Description |
+|---|---|
+| `--json` | Print JSON instead of text output |
+
+Examples:
+
+```sh
+paperclipai worktree:list
+paperclipai worktree:list --json
+```
+
 **`pnpm paperclipai worktree init [options]`** — Create repo-local config/env and an isolated instance for the current worktree.
 
 | Option | Description |

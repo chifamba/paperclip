@@ -167,6 +167,28 @@ pnpm paperclipai dashboard get --company-id <company-id>
 pnpm paperclipai heartbeat run --agent-id <agent-id> [--api-base http://localhost:3100] [--api-key <token>]
 ```
 
+## Routine Commands
+
+Manage and maintain local scheduler routines:
+
+```sh
+pnpm paperclipai routines disable-all --company-id <company-id> [--config <path>] [--data-dir <path>] [--json]
+```
+
+*   `disable-all`: Pauses all active, non-archived routines for a specific company in the local instance.
+
+## Worktree Commands
+
+Manage git worktrees and isolated Paperclip dev instances:
+
+```sh
+pnpm paperclipai worktree:list [--json]
+pnpm paperclipai worktree init --name <name> [--instance <id>] [--seed-mode minimal|full] [--no-seed] [--force]
+pnpm paperclipai worktree env [--json]
+```
+
+*   `worktree:list`: Lists all git worktrees in the repo and flags whether they have a healthy local Paperclip configuration.
+
 ## Local Storage Defaults
 
 Default local instance root is `~/.paperclip/instances/default`:
